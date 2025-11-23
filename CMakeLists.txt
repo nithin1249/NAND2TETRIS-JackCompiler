@@ -14,6 +14,7 @@ add_executable(jack_tokens
         Compiler/Tokenizer.cpp
         Compiler/Tokenizer.h
         Compiler/Token.h
+        Compiler/NodeType.h
 )
 target_include_directories(jack_tokens PRIVATE
         ${CMAKE_CURRENT_SOURCE_DIR}
