@@ -23,11 +23,7 @@ enum class NodeType {
 	ExpressionList,
 
 	// Terminals (leaf categories)
-	Identifier,
-	IntegerConstant,
-	StringConstant,
-	Keyword,
-	Symbol,
+	Leaf
 };
 
 #endif //NAND2TETRIS_NODETYPE_H

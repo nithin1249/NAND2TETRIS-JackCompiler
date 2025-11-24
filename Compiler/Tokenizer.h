@@ -7,7 +7,8 @@
 
 #include <string>
 #include <iostream>
-#include "Token.h"
+#include <memory>
+#include "TokenTypes.h"
 
 namespace nand2tetris::jack {
 	class Tokenizer{
@@ -21,15 +22,15 @@ namespace nand2tetris::jack {
 		private:
 			std::string src;
 			std::size_t pos=0;
-			Token currentToken;
+			std::unique_ptr<Token> currentToken;
 
 			void loadFile(const std::string& filePath);
 			void skipWhitespaceAndComments();
-			Token nextToken();
+			std::unique_ptr<Token> nextToken();
 
-			Token readIdentifierOrKeyword();
-			Token readNumber();
-			Token readString();
+			std::unique_ptr<Token> readIdentifierOrKeyword();
+			std::unique_ptr<Token> readNumber();
+			std::unique_ptr<Token> readString();
 
 	};
 }

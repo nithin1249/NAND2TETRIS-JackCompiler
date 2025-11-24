@@ -7,9 +7,10 @@
 #include <stdexcept>
 
 namespace nand2tetris::jack {
-	Tokenizer::Tokenizer(const std::string &filePath) {
+	Tokenizer::Tokenizer(const std::string &filePath){
 		loadFile(filePath);
-		currentToken.type=TokenType::END_OF_FILE;
+		skipWhitespaceAndComments();
+		currentToken=nextToken();
 	}
 
 	void Tokenizer::loadFile(const std::string &filePath) {
@@ -22,14 +23,20 @@ namespace nand2tetris::jack {
 	}
 
 	bool Tokenizer::hasMoreTokens() const {
-		return pos<src.size() || currentToken.type!=TokenType::END_OF_FILE;
+		// No token yet? Then we assume there *will* be tokens.
+		if (!currentToken) {
+			return true;
+		}
+		return currentToken->getType()!=TokenType::END_OF_FILE;
 	}
 
 	void Tokenizer::advance() {
+		if (!hasMoreTokens()) {
+			return;
+		}
 		skipWhitespaceAndComments();
 		if (pos>=src.size()) {
-			currentToken.type = TokenType::END_OF_FILE;
-			currentToken.text.clear();
+			currentToken=std::make_unique<EofToken>();
 			return;
 		}
 		currentToken=nextToken();
@@ -63,17 +70,17 @@ namespace nand2tetris::jack {
 		}
 	}
 
-	Token Tokenizer::nextToken() {
+	std::unique_ptr<Token> Tokenizer::nextToken() {
+		if (pos>=src.size()) {
+			return std::make_unique<EofToken>();
+		}
 		const char c =src[pos];
 
 		//symbol
 		const std::string symbols="{}()[].,;+-*/&|<>=~";
 		if (symbols.find(c) != std::string::npos) {
-			Token t;
-			t.type = TokenType::SYMBOL;
-			t.text = std::string(1, c);
 			++pos;
-			return t;
+			return std::make_unique<TextToken>(TokenType::SYMBOL, std::string(1,c));
 		}
 
 		//string
@@ -94,9 +101,7 @@ namespace nand2tetris::jack {
 		throw std::runtime_error("Unexpected character in Jack source");
 	}
 
-	Token Tokenizer::readString() {
-		Token t;
-		t.type=TokenType::STRING_CONST;
+	std::unique_ptr<Token> Tokenizer::readString() {
 		++pos; //skip opening of strings "
 
 		std::string value;
@@ -108,17 +113,14 @@ namespace nand2tetris::jack {
 			throw std::runtime_error("Unterminated string constant");
 		}
 		++pos;//skip closing of strings "
-		t.text=value;
-		return t;
+		return std::make_unique<TextToken>(TokenType::STRING_CONST,value);
 	}
 
-	const Token &Tokenizer::current() const {
-		return currentToken;
+	const Token& Tokenizer::current() const {
+		return *currentToken;
 	}
 
-	Token Tokenizer::readNumber() {
-		Token t;
-		t.type=TokenType::INT_CONST;
+	std::unique_ptr<Token> Tokenizer::readNumber() {
 		int value=0;
 
 		while (pos<src.size()&&std::isdigit(static_cast<unsigned char>(src[pos]))) {
@@ -128,10 +130,10 @@ namespace nand2tetris::jack {
 		if (value < 0 || value > 32767) {
 			throw std::runtime_error("Integer constant out of Jack range (0–32767)");
 		}
-		t.intVal=value;
-		t.text=std::to_string(value);
-		return t;
+
+		return std::make_unique<IntToken>(value);
 	}
+
 	bool Tokenizer::isKeywordString(const std::string& s, Keyword& outKw) {
 		using K=Keyword;
 		if (s=="class"){outKw=K::CLASS; return true;}
@@ -159,7 +161,7 @@ namespace nand2tetris::jack {
 		return false;
 	}
 
-	Token Tokenizer::readIdentifierOrKeyword() {
+	std::unique_ptr<Token> Tokenizer::readIdentifierOrKeyword() {
 		std::string s;
 		while (pos<src.size()) {
 			const char c=src[pos];
@@ -169,18 +171,11 @@ namespace nand2tetris::jack {
 			} else break;
 		}
 
-		Token t;
 		Keyword kw;
 		if (isKeywordString(s,kw)) {
-			t.type=TokenType::KEYWORD;
-			t.keyword=kw;
-			t.text=s;
-
-		}else {
-			t.type=TokenType::IDENTIFIER;
-			t.text=s;
+			return std::make_unique<KeywordToken>(kw);
+		} else {
+			return std::make_unique<TextToken>(TokenType::IDENTIFIER, s);
 		}
-
-		return t;
 	}
 }
