@@ -66,7 +66,7 @@ namespace nand2tetris::jack {
 		EofToken() : Token(TokenType::END_OF_FILE) {}
 	};
 
-	inline const char* keywordToString(Keyword kw) {
+	inline const char* keywordToString(const Keyword kw) {
 		using K = Keyword;
 		switch (kw) {
 			case K::CLASS:       return "class";

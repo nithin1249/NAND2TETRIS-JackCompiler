@@ -5,6 +5,7 @@
 #include "Tokenizer.h"
 #include <fstream>
 #include <stdexcept>
+#include <cctype>
 
 namespace nand2tetris::jack {
 	Tokenizer::Tokenizer(const std::string &filePath){
@@ -62,9 +63,16 @@ namespace nand2tetris::jack {
 			//block comment /*...*/
 			if (c=='/' && pos+1<src.size() && src[pos+1]=='*') {
 				pos+=2;
-				while (pos<src.size() && !(src[pos]=='*' && src[pos+1]=='/')) ++pos;
+				while (pos+1<src.size() && !(src[pos]=='*' && src[pos+1]=='/')) ++pos;
+
+				if (pos + 1 >= src.size()) {
+					throw std::runtime_error("Unterminated block comment");
+				}
+				pos+=2;
 				continue;
 			}
+
+
 
 			break; // non-comment non-whitespace
 		}
@@ -106,7 +114,11 @@ namespace nand2tetris::jack {
 
 		std::string value;
 		while (pos<src.size() && src[pos]!='"') {
-			value.push_back(src[pos]);
+			const char c = src[pos];
+			if (c == '\n' || c == '\r') {
+				throw std::runtime_error("Newline in string constant");
+			}
+			value.push_back(c);
 			++pos;
 		}
 		if (pos>=src.size()) {
@@ -117,6 +129,9 @@ namespace nand2tetris::jack {
 	}
 
 	const Token& Tokenizer::current() const {
+		if (!currentToken) {
+			throw std::logic_error("Tokenizer::current() called with no current token");
+		}
 		return *currentToken;
 	}
 
