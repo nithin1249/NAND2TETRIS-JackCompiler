@@ -4,199 +4,401 @@
 
 #ifndef NAND2TETRIS_AST_H
 #define NAND2TETRIS_AST_H
+
 #include <string>
+#include <utility>
 #include <vector>
 #include <memory>
 #include "../Tokenizer/TokenTypes.h"
 
 namespace nand2tetris::jack {
- 	class Node {
- 		public:
- 			virtual ~Node()=default;
- 	};
 
-	enum class ClassVarKind{STATIC,FIELD};
+    /**
+     * @brief Base class for all nodes in the Abstract Syntax Tree (AST).
+     *
+     * All specific AST nodes inherit from this class. It provides a virtual destructor
+     * to ensure proper cleanup of derived classes.
+     */
+    class Node {
+        public:
+            virtual ~Node() = default;
+    };
 
-	class ClassVarDecNode final : public Node {
-		public:
-			ClassVarKind kind;
-			std::string_view type;
-			std::vector<std::string_view> varNames;
+    /**
+     * @brief Enumeration for the kind of class variable.
+     */
+    enum class ClassVarKind {
+        STATIC, ///< A static variable, shared by all instances of the class.
+        FIELD   ///< A field variable, unique to each instance of the class.
+    };
 
-			ClassVarDecNode(const ClassVarKind k, const std::string_view t, std::vector<std::string_view> names)
-			: kind(k), type(t), varNames(std::move(names)) {};
-			~ClassVarDecNode() override =default;
-	};
+    /**
+     * @brief Represents a class variable declaration (static or field).
+     *
+     * Example: `static int x, y;` or `field boolean isActive;`
+     */
+    class ClassVarDecNode final : public Node {
+        public:
+            ClassVarKind kind; ///< The kind of variable (static or field).
+            std::string_view type; ///< The data type of the variable(s) (e.g., "int", "boolean", "MyClass").
+            std::vector<std::string_view> varNames; ///< A list of variable names declared in this statement.
 
-	class VarDecNode final : public Node {
-		public:
-			std::string_view type;
-			std::vector<std::string_view> varNames;
-			VarDecNode(const std::string_view t, std::vector<std::string_view> names): type(t), varNames(std::move(names)){};
-			~VarDecNode() override =default;
-	};
+            /**
+             * @brief Constructs a ClassVarDecNode.
+             *
+             * @param k The kind of variable.
+             * @param t The type of the variable.
+             * @param names A vector of variable names.
+             */
+            ClassVarDecNode(const ClassVarKind k, const std::string_view t, std::vector<std::string_view> names)
+                : kind(k), type(t), varNames(std::move(names)) {};
+            ~ClassVarDecNode() override = default;
+    };
 
-	enum class SubroutineType { CONSTRUCTOR, FUNCTION, METHOD };
+    /**
+     * @brief Represents a local variable declaration within a subroutine.
+     *
+     * Example: `var int i, sum;`
+     */
+    class VarDecNode final : public Node {
+        public:
+            std::string_view type; ///< The data type of the variable(s).
+            std::vector<std::string_view> varNames; ///< A list of variable names declared.
 
-	// Parameters: list of (type, name) pairs
-	struct Parameter {
-		std::string_view type;
-		std::string_view name;
-	};
+            /**
+             * @brief Constructs a VarDecNode.
+             *
+             * @param t The type of the variable.
+             * @param names A vector of variable names.
+             */
+            VarDecNode(const std::string_view t, std::vector<std::string_view> names)
+                : type(t), varNames(std::move(names)) {};
+            ~VarDecNode() override = default;
+    };
 
-	class StatementNode : public Node {
-		public:
-			~StatementNode() override =default;
-	};
+    /**
+     * @brief Enumeration for the type of subroutine.
+     */
+    enum class SubroutineType {
+        CONSTRUCTOR, ///< A class constructor (creates a new instance).
+        FUNCTION,    ///< A static function (belongs to the class).
+        METHOD       ///< A method (belongs to an instance).
+    };
 
-	class ExpressionNode: public Node {
-		public:
-			~ExpressionNode() override =default;
-	};
+    /**
+     * @brief Represents a single parameter in a subroutine declaration.
+     *
+     * Example: `int x` in `function void foo(int x)`
+     */
+    struct Parameter {
+        std::string_view type; ///< The data type of the parameter.
+        std::string_view name; ///< The name of the parameter.
+    };
 
-	//Basic constants
-	class IntegerLiteralNode final: public ExpressionNode {
-		public:
-			int value;
-			explicit IntegerLiteralNode(const int val) : value(val) {}
-			~IntegerLiteralNode() override =default;
-	};
+    /**
+     * @brief Base class for all statement nodes.
+     *
+     * Statements perform actions (e.g., let, if, while, do, return).
+     */
+    class StatementNode : public Node {
+        public:
+            ~StatementNode() override = default;
+    };
 
-	class StringLiteralNode final : public ExpressionNode {
-		public:
-			std::string_view value;
-			explicit StringLiteralNode(const std::string_view val) : value(val) {}
-			~StringLiteralNode() override =default;
-	};
+    /**
+     * @brief Base class for all expression nodes.
+     *
+     * Expressions evaluate to a value.
+     */
+    class ExpressionNode : public Node {
+        public:
+            ~ExpressionNode() override = default;
+    };
 
-	class KeywordLiteralNode final : public ExpressionNode {
-		public:
-			Keyword value; // From your Tokenizer
-			explicit KeywordLiteralNode(const Keyword val) : value(val) {}
-	};
+    /**
+     * @brief Represents an integer literal expression.
+     *
+     * Example: `42`
+     */
+    class IntegerLiteralNode final : public ExpressionNode {
+        public:
+            int value; ///< The integer value.
 
-	//Binary operators and Unary Operators
-	class BinaryOpNode final : public ExpressionNode {
-		public:
-			std::unique_ptr<ExpressionNode> left;
-			char op; // '+', '-', '*', '/', '&', '|', '<', '>', '='
-			std::unique_ptr<ExpressionNode> right;
+            /**
+             * @brief Constructs an IntegerLiteralNode.
+             * @param val The integer value.
+             */
+            explicit IntegerLiteralNode(const int val) : value(val) {}
+            ~IntegerLiteralNode() override = default;
+    };
 
-			BinaryOpNode(std::unique_ptr<ExpressionNode> l, const char o, std::unique_ptr<ExpressionNode> r)
-				: left(std::move(l)), op(o), right(std::move(r)) {}
-			~BinaryOpNode() override =default;
-	};
+    /**
+     * @brief Represents a string literal expression.
+     *
+     * Example: `"Hello World"`
+     */
+    class StringLiteralNode final : public ExpressionNode {
+        public:
+            std::string_view value; ///< The string value (without quotes).
 
-	class UnaryOpNode final : public ExpressionNode {
-		public:
-			char op; // '-', '~'
-			std::unique_ptr<ExpressionNode> term;
+            /**
+             * @brief Constructs a StringLiteralNode.
+             * @param val The string content.
+             */
+            explicit StringLiteralNode(const std::string_view val) : value(val) {}
+            ~StringLiteralNode() override = default;
+    };
 
-			UnaryOpNode(const char o, std::unique_ptr<ExpressionNode> t)
-				: op(o), term(std::move(t)) {}
-			~UnaryOpNode() override =default;
-	};
+    /**
+     * @brief Represents a keyword literal expression.
+     *
+     * Example: `true`, `false`, `null`, `this`
+     */
+    class KeywordLiteralNode final : public ExpressionNode {
+        public:
+            Keyword value; ///< The keyword value.
 
-	class CallNode final : public ExpressionNode {
-		public:
-			std::string_view classNameOrVar; // Optional: "Math" in Math.sqrt(x)
-			std::string_view functionName;   // "sqrt"
-			std::vector<std::unique_ptr<ExpressionNode>> arguments;
+            /**
+             * @brief Constructs a KeywordLiteralNode.
+             * @param val The keyword.
+             */
+            explicit KeywordLiteralNode(const Keyword val) : value(val) {}
+    };
 
-			CallNode(const std::string_view cv, const std::string_view fn, std::vector<std::unique_ptr<ExpressionNode>> args)
-				: classNameOrVar(cv), functionName(fn), arguments(std::move(args)) {}
-			~CallNode() override =default;
-	};
+    /**
+     * @brief Represents a binary operation expression.
+     *
+     * Example: `x + y`, `a < b`
+     */
+    class BinaryOpNode final : public ExpressionNode {
+        public:
+            std::unique_ptr<ExpressionNode> left; ///< The left operand.
+            char op; ///< The operator symbol ('+', '-', '*', '/', '&', '|', '<', '>', '=').
+            std::unique_ptr<ExpressionNode> right; ///< The right operand.
 
-	class IdentifierNode final : public ExpressionNode {
-		public:
-			std::string_view name;
-			std::unique_ptr<ExpressionNode> indexExpr; // nullptr unless it's an array like a[i]
+            /**
+             * @brief Constructs a BinaryOpNode.
+             * @param l The left operand.
+             * @param o The operator character.
+             * @param r The right operand.
+             */
+            BinaryOpNode(std::unique_ptr<ExpressionNode> l, const char o, std::unique_ptr<ExpressionNode> r)
+                : left(std::move(l)), op(o), right(std::move(r)) {}
+            ~BinaryOpNode() override = default;
+    };
 
-			explicit IdentifierNode(const std::string_view n, std::unique_ptr<ExpressionNode> idx = nullptr)
-				: name(n), indexExpr(std::move(idx)) {}
-			~IdentifierNode() override =default;
-	};
+    /**
+     * @brief Represents a unary operation expression.
+     *
+     * Example: `-x`, `~found`
+     */
+    class UnaryOpNode final : public ExpressionNode {
+        public:
+            char op; ///< The operator symbol ('-', '~').
+            std::unique_ptr<ExpressionNode> term; ///< The operand.
 
+            /**
+             * @brief Constructs a UnaryOpNode.
+             * @param o The operator character.
+             * @param t The operand.
+             */
+            UnaryOpNode(const char o, std::unique_ptr<ExpressionNode> t)
+                : op(o), term(std::move(t)) {}
+            ~UnaryOpNode() override = default;
+    };
 
-	class LetStatementNode final : public StatementNode {
-		public:
-			std::string_view varName;
-			std::unique_ptr<ExpressionNode> indexExpr; // For array access like x[i]
-			std::unique_ptr<ExpressionNode> valueExpr;
+    /**
+     * @brief Represents a subroutine call expression.
+     *
+     * Example: `foo()`, `Math.sqrt(x)`, `obj.method()`
+     */
+    class CallNode final : public ExpressionNode {
+        public:
+            std::string_view classNameOrVar; ///< The class name or variable name (optional). Empty if implicit `this`.
+            std::string_view functionName;   ///< The name of the subroutine being called.
+            std::vector<std::unique_ptr<ExpressionNode>> arguments; ///< The list of arguments passed to the call.
 
-			LetStatementNode(const std::string_view name,std::unique_ptr<ExpressionNode> idx,
-				std::unique_ptr<ExpressionNode> val) : varName(name), indexExpr(std::move(idx)), valueExpr(std::move(val)) {}
-			~LetStatementNode() override =default;
-	};
+            /**
+             * @brief Constructs a CallNode.
+             * @param cv The class or variable name (can be empty).
+             * @param fn The function name.
+             * @param args The arguments.
+             */
+            CallNode(const std::string_view cv, const std::string_view fn, std::vector<std::unique_ptr<ExpressionNode>> args)
+                : classNameOrVar(cv), functionName(fn), arguments(std::move(args)) {}
+            ~CallNode() override = default;
+    };
 
-	class IfStatementNode final : public StatementNode {
-		public:
-			std::unique_ptr<ExpressionNode> condition;
-			std::vector<std::unique_ptr<StatementNode>> ifStatements;
-			std::vector<std::unique_ptr<StatementNode>> elseStatements;
+    /**
+     * @brief Represents an identifier expression, possibly with an array index.
+     *
+     * Example: `x`, `arr[i]`
+     */
+    class IdentifierNode final : public ExpressionNode {
+        public:
+            std::string_view name; ///< The name of the identifier.
+            std::unique_ptr<ExpressionNode> indexExpr; ///< The index expression if it's an array access, otherwise nullptr.
 
-			IfStatementNode(std::unique_ptr<ExpressionNode> cond, std::vector<std::unique_ptr<StatementNode>>
-				ifStmts, std::vector<std::unique_ptr<StatementNode>> elseStmts) : condition(std::move(cond)),
-				ifStatements(std::move(ifStmts)),elseStatements(std::move(elseStmts)) {};
-			~IfStatementNode() override =default;
-	};
+            /**
+             * @brief Constructs an IdentifierNode.
+             * @param n The identifier name.
+             * @param idx The index expression (optional).
+             */
+            explicit IdentifierNode(const std::string_view n, std::unique_ptr<ExpressionNode> idx = nullptr)
+                : name(n), indexExpr(std::move(idx)) {}
+            ~IdentifierNode() override = default;
+    };
 
-	class WhileStatementNode final : public StatementNode {
-		public:
-			std::unique_ptr<ExpressionNode> condition;
-			std::vector<std::unique_ptr<StatementNode>> body;
+    /**
+     * @brief Represents a 'let' statement (assignment).
+     *
+     * Example: `let x = 5;`, `let arr[i] = y;`
+     */
+    class LetStatementNode final : public StatementNode {
+        public:
+            std::string_view varName; ///< The name of the variable being assigned to.
+            std::unique_ptr<ExpressionNode> indexExpr; ///< The index expression for array assignment (optional).
+            std::unique_ptr<ExpressionNode> valueExpr; ///< The expression evaluating to the new value.
 
-			WhileStatementNode(std::unique_ptr<ExpressionNode> cond, std::vector<std::unique_ptr<StatementNode>> b) :
-				condition(std::move(cond)), body(std::move(b)) {}
-			~WhileStatementNode() override =default;
-	};
+            /**
+             * @brief Constructs a LetStatementNode.
+             * @param name The variable name.
+             * @param idx The index expression (can be nullptr).
+             * @param val The value expression.
+             */
+            LetStatementNode(const std::string_view name, std::unique_ptr<ExpressionNode> idx,
+                             std::unique_ptr<ExpressionNode> val)
+                : varName(name), indexExpr(std::move(idx)), valueExpr(std::move(val)) {}
+            ~LetStatementNode() override = default;
+    };
 
-	class DoStatementNode final : public StatementNode {
-		public:
-			// do calls are effectively expressions used as statements
-			std::unique_ptr<ExpressionNode> callExpression;
+    /**
+     * @brief Represents an 'if' statement.
+     *
+     * Example: `if (x > 0) { ... } else { ... }`
+     */
+    class IfStatementNode final : public StatementNode {
+        public:
+            std::unique_ptr<ExpressionNode> condition; ///< The condition expression.
+            std::vector<std::unique_ptr<StatementNode>> ifStatements; ///< The statements to execute if true.
+            std::vector<std::unique_ptr<StatementNode>> elseStatements; ///< The statements to execute if false (optional).
 
-			explicit DoStatementNode(std::unique_ptr<ExpressionNode> call): callExpression(std::move(call)) {}
-			~DoStatementNode() override =default;
-	};
+            /**
+             * @brief Constructs an IfStatementNode.
+             * @param cond The condition.
+             * @param ifStmts The 'if' block statements.
+             * @param elseStmts The 'else' block statements.
+             */
+            IfStatementNode(std::unique_ptr<ExpressionNode> cond, std::vector<std::unique_ptr<StatementNode>> ifStmts,
+                            std::vector<std::unique_ptr<StatementNode>> elseStmts)
+                : condition(std::move(cond)), ifStatements(std::move(ifStmts)), elseStatements(std::move(elseStmts)) {};
+            ~IfStatementNode() override = default;
+    };
 
-	class ReturnStatementNode final : public StatementNode {
-		public:
-			std::unique_ptr<ExpressionNode> expression; // Can be nullptr for 'return;'
+    /**
+     * @brief Represents a 'while' statement.
+     *
+     * Example: `while (x > 0) { ... }`
+     */
+    class WhileStatementNode final : public StatementNode {
+        public:
+            std::unique_ptr<ExpressionNode> condition; ///< The loop condition.
+            std::vector<std::unique_ptr<StatementNode>> body; ///< The loop body statements.
 
-			explicit ReturnStatementNode(std::unique_ptr<ExpressionNode> expr): expression(std::move(expr)) {}
-			~ReturnStatementNode() override =default;
-	};
+            /**
+             * @brief Constructs a WhileStatementNode.
+             * @param cond The condition.
+             * @param b The body statements.
+             */
+            WhileStatementNode(std::unique_ptr<ExpressionNode> cond, std::vector<std::unique_ptr<StatementNode>> b)
+                : condition(std::move(cond)), body(std::move(b)) {}
+            ~WhileStatementNode() override = default;
+    };
 
+    /**
+     * @brief Represents a 'do' statement.
+     *
+     * Example: `do Output.printInt(x);`
+     * 'do' statements are used to call subroutines for their side effects, ignoring the return value.
+     */
+    class DoStatementNode final : public StatementNode {
+        public:
+            std::unique_ptr<CallNode> callExpression; ///< The subroutine call expression.
 
-	class SubroutineDecNode final :public Node {
-		public:
-			SubroutineType subType;
-			std::string_view returnType;
-			std::string_view name;
-			std::vector<Parameter> parameters;
+            /**
+             * @brief Constructs a DoStatementNode.
+             * @param call The call expression.
+             */
+            explicit DoStatementNode(std::unique_ptr<CallNode> call) : callExpression(std::move(call)) {}
+            ~DoStatementNode() override = default;
+    };
 
-			std::vector<std::unique_ptr<VarDecNode>> localVars;
-			std::vector<std::unique_ptr<StatementNode>> statements{};
+    /**
+     * @brief Represents a 'return' statement.
+     *
+     * Example: `return;`, `return x + 1;`
+     */
+    class ReturnStatementNode final : public StatementNode {
+        public:
+            std::unique_ptr<ExpressionNode> expression; ///< The return value expression (optional).
 
-		SubroutineDecNode(const SubroutineType st, const std::string_view ret, const std::string_view n,
-			std::vector<std::unique_ptr<VarDecNode>> vars,std::vector<std::unique_ptr<StatementNode>> stmts): subType
-			(st), returnType(ret), name(n),localVars(std::move(vars)), statements(std::move(stmts)) {}
+            /**
+             * @brief Constructs a ReturnStatementNode.
+             * @param expr The return expression (can be nullptr).
+             */
+            explicit ReturnStatementNode(std::unique_ptr<ExpressionNode> expr) : expression(std::move(expr)) {}
+            ~ReturnStatementNode() override = default;
+    };
 
-		~SubroutineDecNode() override =default;
-	};
+    /**
+     * @brief Represents a subroutine declaration (constructor, function, or method).
+     */
+    class SubroutineDecNode final : public Node {
+        public:
+            SubroutineType subType; ///< The type of subroutine (constructor, function, method).
+            std::string_view returnType; ///< The return type (e.g., "void", "int", "MyClass").
+            std::string_view name; ///< The name of the subroutine.
+            std::vector<Parameter> parameters; ///< The list of parameters.
 
+            std::vector<std::unique_ptr<VarDecNode>> localVars; ///< The local variable declarations.
+            std::vector<std::unique_ptr<StatementNode>> statements; ///< The body statements.
 
- 	class ClassNode final :public Node {
- 		public:
- 			std::string_view className;
- 			std::vector<std::unique_ptr<ClassVarDecNode>> classVars;
- 			std::vector<std::unique_ptr<SubroutineDecNode>> subroutineDecs;
- 			explicit ClassNode(const std::string_view className):className(className){};
- 			~ClassNode() override =default;
- 	};
- }
+            /**
+             * @brief Constructs a SubroutineDecNode.
+             * @param st The subroutine type.
+             * @param ret The return type.
+             * @param n The name.
+             * @param parameters
+             * @param vars The local variables.
+             * @param stmts The body statements.
+             */
+            SubroutineDecNode(const SubroutineType st, const std::string_view ret, const std::string_view n,
+                std::vector<Parameter> parameters, std::vector<std::unique_ptr<VarDecNode>> vars,
+                std::vector<std::unique_ptr<StatementNode>> stmts)
+                : subType(st), returnType(ret), name(n),parameters(std::move(parameters)),localVars(std::move(vars))
+                ,statements(std::move(stmts)) {}
 
+            ~SubroutineDecNode() override = default;
+    };
+
+    /**
+     * @brief Represents a complete Jack class.
+     *
+     * This is the root node of the AST for a single file.
+     */
+    class ClassNode final : public Node {
+        public:
+            std::string_view className; ///< The name of the class.
+            std::vector<std::unique_ptr<ClassVarDecNode>> classVars; ///< The class-level variable declarations.
+            std::vector<std::unique_ptr<SubroutineDecNode>> subroutineDecs; ///< The subroutine declarations.
+
+            /**
+             * @brief Constructs a ClassNode.
+             * @param className The name of the class.
+             */
+            explicit ClassNode(const std::string_view className) : className(className) {};
+            ~ClassNode() override = default;
+    };
+}
 
 #endif //NAND2TETRIS_AST_H

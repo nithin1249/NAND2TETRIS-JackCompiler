@@ -13,12 +13,18 @@ add_executable(NAND2TETRIS main.cpp
 )
 
 add_executable(jack_tokens
-        "tests/JackTokensTest/jack_tokens.cpp"
+        tests/JackTokensTest/jack_tokens.cpp
         Compiler/Tokenizer/Tokenizer.cpp
         Compiler/Tokenizer/Tokenizer.h
         Compiler/Tokenizer/TokenTypes.h
 )
-target_include_directories(jack_tokens PRIVATE
-        ${CMAKE_CURRENT_SOURCE_DIR}
+add_executable(jack_parser
+        Compiler/Tokenizer/Tokenizer.cpp
+        Compiler/Tokenizer/Tokenizer.h
+        Compiler/Tokenizer/TokenTypes.h
+        Compiler/Parser/AST.h
+        Compiler/Parser/Parser.cpp
+        Compiler/Parser/Parser.h
+        tests/JackParserTest/jack_parser.cpp
 )
 
