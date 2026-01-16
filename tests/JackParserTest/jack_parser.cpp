@@ -15,7 +15,7 @@ namespace fs = std::filesystem;
 
 int main(int argc, char* argv[]) {
 	if (argc < 2) {
-		std::cerr << "Usage: JackParserTest <inputfile.jack>" << std::endl;
+		std::cerr << "Usage: JackParserTest <input file.jack>" << std::endl;
 		return 1;
 	}
 

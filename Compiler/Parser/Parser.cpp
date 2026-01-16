@@ -50,9 +50,6 @@ namespace nand2tetris::jack {
         if (check(text)) {
             advance();
         } else {
-            std::cerr << "DEBUG: Expected '" << text << "' but found '"
-                  << currentToken->getValue() << "' (Type: "
-                  << static_cast<int>(currentToken->getType()) << ")" << std::endl;
             tokenizer.errorAt(currentToken->getLine(),currentToken->getColumn(), errorMessage);
         }
     }
