@@ -654,7 +654,7 @@ namespace nand2tetris::jack {
                 out << sp << "    <symbol> { </symbol>\n";
                 for (const auto& var : localVars) var->print(out, indent + 4);
                 out << sp << "    <statements>\n";
-                for (const auto& stmt : statements) stmt->print(out, indent + 4);
+                for (const auto& stmt : statements) stmt->print(out, indent + 6);
                 out << sp << "    </statements>\n";
                 out << sp << "    <symbol> } </symbol>\n";
                 out << sp << "  </subroutineBody>\n";
