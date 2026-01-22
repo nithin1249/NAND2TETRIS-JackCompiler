@@ -10,6 +10,7 @@
 #include "../../Compiler/Parser/AST.h"
 #include <cstdlib>
 #include <filesystem>
+#include <chrono>
 using namespace nand2tetris::jack;
 namespace fs = std::filesystem;
 
@@ -29,14 +30,22 @@ int main(int argc, char* argv[]) {
 
 		std::cout << "Parsing file: " << argv[1] << "..." << std::endl;
 
+		std::chrono::high_resolution_clock::time_point parseStart=std::chrono::high_resolution_clock::now();
+
 		// 3. Start parsing at the Class level (the root of Jack grammar)
 		std::unique_ptr<ClassNode> astRoot = parser.parse();
+
+		std::chrono::high_resolution_clock::time_point parseEnd = std::chrono::high_resolution_clock::now();
+
+		std::chrono::duration<double, std::milli> parseDuration = parseEnd - parseStart;
 
 		// 4. If we reached here, the syntax is 100% correct
 		std::cout << "\n========================================" << std::endl;
 		std::cout << "SUCCESS: File parsed successfully!" << std::endl;
-		std::cout << "Class Name: " << astRoot->className << std::endl;
-		std::cout << "Subroutines found: " << astRoot->subroutineDecs.size() << std::endl;
+		std::cout << "Time taken: " << parseDuration.count() << " ms" << std::endl;
+		std::cout << "Class Name: " << astRoot->getClassName() << std::endl;
+		std::cout << "Class Variables found: " << astRoot->get_Number_of_classVars() << std::endl;
+		std::cout << "Subroutines found: " << astRoot->get_Number_of_Subroutines() << std::endl;
 		std::cout << "========================================" << std::endl;
 
 
@@ -47,8 +56,12 @@ int main(int argc, char* argv[]) {
 		std::ofstream xmlFile(outputFileName);
 		if (xmlFile.is_open()) {
 			std::cout << "Generating XML tree: " << outputFileName << "..." << std::endl;
-			astRoot->print(xmlFile, 0); // Recursive call to all nodes
+			std::chrono::high_resolution_clock::time_point xmlStart = std::chrono::high_resolution_clock::now();
+			astRoot->printXml(xmlFile, 0); // Recursive call to all nodes
+			std::chrono::high_resolution_clock::time_point xmlEnd = std::chrono::high_resolution_clock::now();
 			xmlFile.close();
+			std::chrono::duration<double, std::milli> xmlDuration = xmlEnd - xmlStart;
+			std::cout << "XML Generation Time: " << xmlDuration.count() << " ms" << std::endl;
 		} else {
 			std::cerr << "Error: Could not create output file " << outputFileName << std::endl;
 		}
@@ -71,8 +84,6 @@ int main(int argc, char* argv[]) {
 		std::string command = "python3 \"" + abs_script + "\" \"" + abs_xml + "\" &";
 
 		std::system(command.c_str());
-
-
 	} catch (const std::runtime_error& e) {
 		// This catches the fatal errors thrown by your Tokenizer::errorAt
 		std::cerr << "\nSYNTAX ERROR DETECTED:" << std::endl;

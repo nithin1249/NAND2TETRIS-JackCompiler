@@ -1,154 +1,269 @@
-import webview
+import sys
+import os
 import xml.etree.ElementTree as ET
 import json
-import os
-import sys
+import webview  # pip install pywebview
 
-def xml_to_dict(el):
-    """Converts Jack XML to JSON structure for d3.v7.min.js."""
-    tag_class = el.tag.lower()
-    name = el.tag
-    content = el.text.strip() if el.text and el.text.strip() else ""
-    node = {"name": name, "content": content, "class": tag_class, "children": []}
-    for child in el:
-        node["children"].append(xml_to_dict(child))
-    return node
+# ==========================================
+# 1. PARSER & STYLING CONFIG
+# ==========================================
+def parse_node(element):
+    tag = element.tag
+    text = element.text.strip() if element.text else ""
+    label = tag
+    if text: label += f": {text}"
 
-def generate_html(data):
-    # 1. Get the absolute path to the folder where THIS script lives
+    # GitHub Dark Dimmed Theme Palette
+    # Each type has a { fill, stroke }
+    style_map = {
+        "class":           {"f": "#1f6feb", "s": "#388bfd"}, # Blue
+        "subroutineDec":   {"f": "#238636", "s": "#2ea043"}, # Green
+        "doStatement":     {"f": "#8957e5", "s": "#a371f7"}, # Purple
+        "letStatement":    {"f": "#8957e5", "s": "#a371f7"},
+        "ifStatement":     {"f": "#d29922", "s": "#e3b341"}, # Orange
+        "whileStatement":  {"f": "#d29922", "s": "#e3b341"},
+        "returnStatement": {"f": "#da3633", "s": "#f85149"}, # Red
+        "identifier":      {"f": "#30363d", "s": "#6e7681"}, # Dark Gray
+        "symbol":          {"f": "#30363d", "s": "#8b949e"},
+        "integerConstant": {"f": "#1f6feb", "s": "#58a6ff"},
+        "stringConstant":  {"f": "#1f6feb", "s": "#58a6ff"},
+        "keyword":         {"f": "#da3633", "s": "#f85149"},
+        # Default
+        "default":         {"f": "#30363d", "s": "#6e7681"}
+    }
+
+    style = style_map.get(tag, style_map["default"])
+
+    return {
+        "name": label,
+        "fill": style["f"],
+        "stroke": style["s"],
+        "children": [parse_node(child) for child in element]
+    }
+
+# ==========================================
+# 2. LOCAL ASSET LOADER
+# ==========================================
+def get_d3_script():
+    """
+    Tries to load d3.v7.min.js from the same folder as this script.
+    Falls back to CDN if missing.
+    """
     script_dir = os.path.dirname(os.path.abspath(__file__))
-
-    # 2. Build the full path to the JS file (e.g., /.../tools/d3.v7.min.js)
     d3_path = os.path.join(script_dir, "d3.v7.min.js")
 
-    d3_script = ""
     if os.path.exists(d3_path):
         print(f"[+] Found local D3.js at: {d3_path}")
-        with open(d3_path, "r", encoding="utf-8") as f:
-            d3_script = f"<script>\n{f.read()}\n</script>"
-    else:
-        print(f"[!] Warning: d3.v7.min.js not found at {d3_path}")
-        print("    -> Falling back to online CDN.")
-        d3_script = '<script src="https://d3js.org/d3.v7.min.js"></script>'
+        try:
+            with open(d3_path, "r", encoding="utf-8") as f:
+                return f"<script>\n{f.read()}\n</script>"
+        except Exception as e:
+            print(f"[!] Error reading local D3: {e}")
 
-    json_str = json.dumps(data)
+    print(f"[!] Warning: d3.v7.min.js not found at {d3_path}")
+    print("    -> Falling back to online CDN.")
+    return '<script src="https://d3js.org/d3.v7.min.js"></script>'
+
+# ==========================================
+# 3. APP GENERATOR
+# ==========================================
+def get_html_content(json_data, d3_script_tag):
+    json_str = json.dumps(json_data)
+
     return f"""
-    <!DOCTYPE html>
-    <html>
-    <head>
-        <style>
-            html, body {{ 
-                background-color: #0d1117; 
-                margin: 0; padding: 0;
-                width: 100%; height: 100%;
-                overflow: hidden;
-                font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-            }}
-            #canvas {{ width: 100vw; height: 100vh; display: block; cursor: grab; }}
-            #canvas:active {{ cursor: grabbing; }}
+<!DOCTYPE html>
+<html>
+<head>
+    {d3_script_tag}
+    <style>
+        /* Modern slick UI */
+        body {{ 
+            margin: 0; 
+            background-color: #0d1117; /* GitHub Dimmed BG */
+            overflow: hidden; 
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+        }}
+        canvas {{ display: block; outline: none; }}
+        
+        /* Floating HUD */
+        #ui-layer {{
+            position: fixed;
+            top: 20px; left: 20px;
+            pointer-events: none;
+        }}
+        .card {{
+            background: rgba(22, 27, 34, 0.95);
+            backdrop-filter: blur(10px);
+            border: 1px solid #30363d;
+            border-radius: 6px;
+            padding: 12px 16px;
+            color: #c9d1d9;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+            margin-bottom: 10px;
+        }}
+        h1 {{ margin: 0 0 5px 0; font-size: 14px; font-weight: 600; color: #f0f6fc; }}
+        p {{ margin: 0; font-size: 12px; color: #8b949e; }}
+        .badge {{ display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 6px; }}
+    </style>
+</head>
+<body>
+    <div id="ui-layer">
+        <div class="card">
+            <h1>Jack Compiler Viz</h1>
+            <p>Pan: Left Click &bull; Zoom: Scroll</p>
+        </div>
+        </div>
+    
+    <canvas id="viz"></canvas>
+
+    <script>
+        const data = {json_str};
+        const canvas = document.querySelector("#viz");
+        const ctx = canvas.getContext("2d", {{ alpha: false }});
+        
+        let width = window.innerWidth;
+        let height = window.innerHeight;
+        let transform = d3.zoomIdentity;
+
+        // --- 1. SETUP D3 LAYOUT ---
+        const root = d3.hierarchy(data);
+        const treeLayout = d3.tree().nodeSize([40, 200]); // Tighter vertical, wider horizontal
+        treeLayout(root);
+
+        // --- 2. HELPER: ROUNDED RECTANGLES ---
+        function roundRect(ctx, x, y, width, height, radius) {{
+            ctx.beginPath();
+            ctx.moveTo(x + radius, y);
+            ctx.lineTo(x + width - radius, y);
+            ctx.quadraticCurveTo(x + width, y, x + width, y + radius);
+            ctx.lineTo(x + width, y + height - radius);
+            ctx.quadraticCurveTo(x + width, y + height, x + width - radius, y + height);
+            ctx.lineTo(x + radius, y + height);
+            ctx.quadraticCurveTo(x, y + height, x, y + height - radius);
+            ctx.lineTo(x, y + radius);
+            ctx.quadraticCurveTo(x, y, x + radius, y);
+            ctx.closePath();
+        }}
+
+        // --- 3. RENDER LOOP ---
+        function draw() {{
+            const k = transform.k;
+            const tx = transform.x;
+            const ty = transform.y;
+
+            // Clear Background
+            ctx.fillStyle = "#0d1117";
+            ctx.fillRect(0, 0, width, height);
             
-            /* High-Performance SVG Styles */
-            .link {{ fill: none; stroke: #30363d; stroke-width: 2px; transition: stroke 0.2s; }}
-            .node rect {{ stroke-width: 2px; rx: 6; ry: 6; transition: filter 0.2s; }}
-            .node:hover rect {{ filter: brightness(1.2); }}
-            .node text {{ font-size: 11px; font-weight: bold; fill: #ffffff; pointer-events: none; }}
-            .node .content-text {{ fill: #8b949e; font-family: "SFMono-Regular", Consolas, monospace; font-weight: normal; }}
+            ctx.save();
+            ctx.translate(tx, ty);
+            ctx.scale(k, k);
+
+            // A. DRAW LINKS (Smooth Bezier)
+            ctx.beginPath();
+            ctx.strokeStyle = "#30363d"; // Subtle link color
+            ctx.lineWidth = 2;
             
-            /* GitHub-Inspired Syntax Theme */
-            .class rect {{ fill: #1f6feb; stroke: #388bfd; }}
-            .subroutinedec rect {{ fill: #238636; stroke: #2ea043; }}
-            .letstatement rect, .ifstatement rect, .whilestatement rect, .returnstatement rect {{ fill: #8957e5; stroke: #a371f7; }}
-            .expression rect {{ fill: #d29922; stroke: #e3b341; }}
-            .term rect {{ fill: #30363d; stroke: #8b949e; }}
-        </style>
-        {d3_script}
-    </head>
-    <body>
-        <div id="canvas"></div>
-        <script>
-            const data = {json_str};
+            const linkGen = d3.linkHorizontal()
+                .x(d => d.y)
+                .y(d => d.x)
+                .context(ctx);
             
-            const svg = d3.select("#canvas").append("svg")
-                .attr("width", "100%")
-                .attr("height", "100%")
-                .call(d3.zoom().scaleExtent([0.05, 10]).on("zoom", (e) => g.attr("transform", e.transform)));
-
-            const g = svg.append("g");
-            
-            // Layout Settings for Sideways
-            const treeLayout = d3.tree().nodeSize([50, 240]); 
-            const root = d3.hierarchy(data);
-            treeLayout(root);
-
-            // Draw Links - Horizontal Curves
-            g.selectAll(".link")
-                .data(root.links())
-                .enter().append("path")
-                .attr("class", "link")
-                .attr("d", d3.linkHorizontal().x(d => d.y).y(d => d.x));
-
-            // Draw Nodes
-            const node = g.selectAll(".node")
-                .data(root.descendants())
-                .enter().append("g")
-                .attr("class", d => "node " + d.data.class)
-                .attr("transform", d => `translate(${{d.y}},${{d.x}})`);
-
-            // Node Cards
-            node.append("rect")
-                .attr("y", -20)
-                .attr("x", 0)
-                .attr("width", d => Math.max(140, (d.data.content.length * 8) + 40))
-                .attr("height", 40);
-
-            node.append("text")
-                .attr("x", 10)
-                .attr("y", -5)
-                .text(d => d.data.name.toUpperCase());
-
-            node.append("text")
-                .attr("class", "content-text")
-                .attr("x", 10)
-                .attr("y", 12)
-                .text(d => d.data.content);
-
-            // Initial Positioning: Center left
-            const initialScale = 0.8;
-            svg.call(d3.zoom().transform, d3.zoomIdentity.translate(100, window.innerHeight / 2).scale(initialScale));
-
-            // Fullscreen Resize Handler
-            window.addEventListener('resize', () => {{
-                svg.attr("width", window.innerWidth).attr("height", window.innerHeight);
+            root.links().forEach(d => {{
+                // Culling
+                const sy = d.source.x * k + ty;
+                if (sy < -100 || sy > height + 100) return;
+                linkGen(d);
             }});
-        </script>
-    </body>
-    </html>
-    """
-if __name__ == "__main__":
+            ctx.stroke();
 
-    # 1. Check if an argument was actually passed
+            // B. DRAW NODES (Rounded Cards)
+            ctx.font = "600 12px -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif";
+            ctx.textBaseline = "middle";
+            ctx.lineWidth = 1.5;
+
+            root.descendants().forEach(d => {{
+                // Culling
+                const sy = d.x * k + ty;
+                const sx = d.y * k + tx;
+                if (sy < -50 || sy > height + 50) return;
+                if (sx < -200 || sx > width + 50) return;
+
+                const nodeW = Math.max(120, ctx.measureText(d.data.name).width + 30);
+                const nodeH = 26;
+                const nodeX = d.y;
+                const nodeY = d.x - (nodeH / 2);
+
+                // 1. Draw Card Background (Rounded)
+                roundRect(ctx, nodeX, nodeY, nodeW, nodeH, 6); // Radius 6px
+                ctx.fillStyle = d.data.fill; 
+                ctx.fill();
+
+                // 2. Draw Card Border
+                ctx.strokeStyle = d.data.stroke;
+                ctx.stroke();
+
+                // 3. Draw Text
+                if (k > 0.4) {{
+                    ctx.fillStyle = "#ffffff"; // White text
+                    ctx.fillText(d.data.name, nodeX + 10, d.x + 1);
+                }}
+            }});
+
+            ctx.restore();
+        }}
+
+        // --- 4. INTERACTION ---
+        const zoom = d3.zoom()
+            .scaleExtent([0.1, 4])
+            .on("zoom", e => {{
+                transform = e.transform;
+                requestAnimationFrame(draw);
+            }});
+
+        d3.select(canvas)
+            .call(zoom)
+            .call(zoom.transform, d3.zoomIdentity.translate(100, height / 2).scale(0.8));
+
+        window.addEventListener("resize", () => {{
+            width = window.innerWidth;
+            height = window.innerHeight;
+            canvas.width = width;
+            canvas.height = height;
+            draw();
+        }});
+        
+        // High DPI Support
+        const dpr = window.devicePixelRatio || 1;
+        canvas.width = window.innerWidth * dpr;
+        canvas.height = window.innerHeight * dpr;
+        ctx.scale(dpr, dpr);
+
+        window.dispatchEvent(new Event('resize'));
+    </script>
+</body>
+</html>
+    """
+
+if __name__ == "__main__":
     if len(sys.argv) < 2:
-        print("\n[!] ERROR: No XML file provided.")
-        print("Usage: python3 jack_viz_web.py <path_to_xml>\n")
+        print("Usage: python jack_viz_slick.py <file.xml>")
         sys.exit(1)
 
     xml_path = sys.argv[1]
+    if os.path.exists(xml_path):
+        print("Parsing...")
+        tree = ET.parse(xml_path)
+        json_data = parse_node(tree.getroot())
+        d3_script = get_d3_script()
+        html_content = get_html_content(json_data,d3_script)
 
-    # 2. Check if the file physically exists on the disk
-    if not os.path.exists(xml_path):
-        print(f"\n[!] ERROR: File not found at: {xml_path}")
-        print("Ensure your C++ program is generating the XML correctly.\n")
-        sys.exit(1)
-
-    try:
-        # 3. Proceed with parsing and launching
-        tree_xml = ET.parse(xml_path)
-        data_json = xml_to_dict(tree_xml.getroot())
-        html_content = generate_html(data_json)
-
-        window = webview.create_window('Jack AST Explorer (Horizontal)', html=html_content, background_color='#0d1117')
+        print("Launching...")
+        webview.create_window(
+            title="Jack Visualizer Pro",
+            html=html_content,
+            width=1280,
+            height=800,
+            background_color='#0d1117'
+        )
         webview.start()
-    except ET.ParseError as e:
-        print(f"\n[!] ERROR: Invalid XML format in {xml_path}")
-        print(f"Details: {e}\n")
-        sys.exit(1)

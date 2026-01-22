@@ -7,6 +7,7 @@
 
 #include <string>
 #include <cstddef>
+#include <unordered_map>
 
 namespace nand2tetris::jack {
 
@@ -64,6 +65,48 @@ namespace nand2tetris::jack {
             case K::THIS_:       return "this";
         }
         return "<unknown>";
+    }
+
+    /**
+     * @brief Checks if a string corresponds to a Jack keyword.
+     *
+     * @param s The string to check.
+     * @param outKw Output parameter where the corresponding Keyword enum will be stored if found.
+     * @return true if the string is a keyword, false otherwise.
+     */
+
+    inline bool isKeywordString(std::string_view s, Keyword &outKw) {
+        std::unordered_map<std::string_view, Keyword> keywordMap = {
+            {"class",       Keyword::CLASS},
+            {"method",      Keyword::METHOD},
+            {"function",    Keyword::FUNCTION},
+            {"constructor", Keyword::CONSTRUCTOR},
+            {"int",         Keyword::INT},
+            {"boolean",     Keyword::BOOLEAN},
+            {"char",        Keyword::CHAR},
+            {"void",        Keyword::VOID},
+            {"var",         Keyword::VAR},
+            {"static",      Keyword::STATIC},
+            {"field",       Keyword::FIELD},
+            {"let",         Keyword::LET},
+            {"do",          Keyword::DO},
+            {"if",          Keyword::IF},
+            {"else",        Keyword::ELSE},
+            {"while",       Keyword::WHILE},
+            {"return",      Keyword::RETURN},
+            {"true",        Keyword::TRUE_},
+            {"false",       Keyword::FALSE_},
+            {"null",        Keyword::NULL_},
+            {"this",        Keyword::THIS_}
+        };
+
+        const auto it = keywordMap.find(s);
+        if (it != keywordMap.end()) {
+            outKw = it->second;
+            return true;
+        }
+
+        return false;
     }
 
     /**

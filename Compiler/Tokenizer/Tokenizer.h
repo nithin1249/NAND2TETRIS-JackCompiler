@@ -50,14 +50,6 @@ namespace nand2tetris::jack {
              */
             const Token& current() const;
 
-            /**
-             * @brief Checks if a string corresponds to a Jack keyword.
-             *
-             * @param s The string to check.
-             * @param outKw Output parameter where the corresponding Keyword enum will be stored if found.
-             * @return true if the string is a keyword, false otherwise.
-             */
-            static bool isKeywordString(std::string_view s, Keyword &outKw);
 
             /**
              * @brief Peeks at the next token without advancing the current token.

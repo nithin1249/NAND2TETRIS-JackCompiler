@@ -10,6 +10,8 @@ add_executable(NAND2TETRIS main.cpp
         Compiler/Parser/AST.h
         Compiler/Parser/Parser.cpp
         Compiler/Parser/Parser.h
+        "Compiler/Syntax Analyser/SymbolTable.cpp"
+        "Compiler/Syntax Analyser/SymbolTable.h"
 )
 
 add_executable(jack_tokens

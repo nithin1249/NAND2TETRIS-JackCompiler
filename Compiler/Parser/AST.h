@@ -22,7 +22,7 @@ namespace nand2tetris::jack {
     class Node {
         public:
             virtual ~Node() = default;
-            virtual void print(std::ostream& out, int indent) const=0;
+            virtual void printXml(std::ostream& out, int indent) const=0;
     };
 
     /**
@@ -39,11 +39,11 @@ namespace nand2tetris::jack {
      * Example: `static int x, y;` or `field boolean isActive;`
      */
     class ClassVarDecNode final : public Node {
-        public:
+        protected:
             ClassVarKind kind; ///< The kind of variable (static or field).
             std::string_view type; ///< The data type of the variable(s) (e.g., "int", "boolean", "MyClass").
             std::vector<std::string_view> varNames; ///< A list of variable names declared in this statement.
-
+        public:
             /**
              * @brief Constructs a ClassVarDecNode.
              *
@@ -55,7 +55,7 @@ namespace nand2tetris::jack {
                 : kind(k), type(t), varNames(std::move(names)) {};
             ~ClassVarDecNode() override = default;
 
-            void print(std::ostream& out, const int indent) const override {
+            void printXml(std::ostream& out, const int indent) const override {
                 const std::string sp(indent, ' ');
                 out << sp << "<classVarDec>\n";
 
@@ -83,10 +83,10 @@ namespace nand2tetris::jack {
      * Example: `var int i, sum;`
      */
     class VarDecNode final : public Node {
-        public:
+        protected:
             std::string_view type; ///< The data type of the variable(s).
             std::vector<std::string_view> varNames; ///< A list of variable names declared.
-
+        public:
             /**
              * @brief Constructs a VarDecNode.
              *
@@ -96,7 +96,7 @@ namespace nand2tetris::jack {
             VarDecNode(const std::string_view t, std::vector<std::string_view> names)
                 : type(t), varNames(std::move(names)) {};
             ~VarDecNode() override = default;
-            void print(std::ostream& out, const int indent) const override {
+            void printXml(std::ostream& out, const int indent) const override {
                 const std::string sp(indent, ' ');
 
                 // In the Jack analyzer standard, local variable declarations
@@ -176,16 +176,16 @@ namespace nand2tetris::jack {
      * Example: `42`
      */
     class IntegerLiteralNode final : public ExpressionNode {
-        public:
+        protected:
             int value; ///< The integer value.
-
+        public:
             /**
              * @brief Constructs an IntegerLiteralNode.
              * @param val The integer value.
              */
             explicit IntegerLiteralNode(const int val) : value(val) {}
             ~IntegerLiteralNode() override = default;
-            void print(std::ostream& out, const int indent) const override {
+            void printXml(std::ostream& out, const int indent) const override {
                 const std::string sp(indent, ' ');
                 out << sp << "<term>\n";  // Add Wrapper
                 out << sp << "  <integerConstant> " << value << " </integerConstant>\n";
@@ -199,16 +199,16 @@ namespace nand2tetris::jack {
      * Example: `"Hello World"`
      */
     class StringLiteralNode final : public ExpressionNode {
-        public:
+        protected:
             std::string_view value; ///< The string value (without quotes).
-
+        public:
             /**
              * @brief Constructs a StringLiteralNode.
              * @param val The string content.
              */
             explicit StringLiteralNode(const std::string_view val) : value(val) {}
             ~StringLiteralNode() override = default;
-            void print(std::ostream& out, const int indent) const override {
+            void printXml(std::ostream& out, const int indent) const override {
                 const std::string sp(indent, ' ');
                 out << sp << "<term>\n";  // Add Wrapper
                 out << sp << "<stringConstant> " << value << " </stringConstant>\n";
@@ -222,28 +222,28 @@ namespace nand2tetris::jack {
      * Example: `true`, `false`, `null`, `this`
      */
     class KeywordLiteralNode final : public ExpressionNode {
-        public:
+        protected:
             Keyword value; ///< The keyword value.
-
+        public:
             /**
              * @brief Constructs a KeywordLiteralNode.
              * @param val The keyword.
              */
             explicit KeywordLiteralNode(const Keyword val) : value(val) {}
-            void print(std::ostream& out, const int indent) const override {
-                    std::string val;
-                    switch(value) {
-                        case Keyword::TRUE_:  val = "true";  break;
-                        case Keyword::FALSE_: val = "false"; break;
-                        case Keyword::NULL_:  val = "null";  break;
-                        case Keyword::THIS_:  val = "this";  break;
-                        default: val="no"; break;
-                    }
+            void printXml(std::ostream& out, const int indent) const override {
+                std::string val;
+                switch(value) {
+                    case Keyword::TRUE_:  val = "true";  break;
+                    case Keyword::FALSE_: val = "false"; break;
+                    case Keyword::NULL_:  val = "null";  break;
+                    case Keyword::THIS_:  val = "this";  break;
+                    default: val="no"; break;
+                }
 
-                    const std::string sp(indent, ' ');
-                    out << sp << "<term>\n";  // Add Wrapper
-                    out << sp << "<keyword> " << val << " </keyword>\n";
-                    out << sp << "</term>\n"; // Add Wrapper
+                const std::string sp(indent, ' ');
+                out << sp << "<term>\n";  // Add Wrapper
+                out << sp << "<keyword> " << val << " </keyword>\n";
+                out << sp << "</term>\n"; // Add Wrapper
             }
     };
 
@@ -263,11 +263,11 @@ namespace nand2tetris::jack {
         }
     }
     class BinaryOpNode final : public ExpressionNode {
-        public:
+        protected:
             std::unique_ptr<ExpressionNode> left; ///< The left operand.
             char op; ///< The operator symbol ('+', '-', '*', '/', '&', '|', '<', '>', '=').
             std::unique_ptr<ExpressionNode> right; ///< The right operand.
-
+        public:
             /**
              * @brief Constructs a BinaryOpNode.
              * @param l The left operand.
@@ -277,16 +277,16 @@ namespace nand2tetris::jack {
             BinaryOpNode(std::unique_ptr<ExpressionNode> l, const char o, std::unique_ptr<ExpressionNode> r)
                 : left(std::move(l)), op(o), right(std::move(r)) {}
             ~BinaryOpNode() override = default;
-            void print(std::ostream& out, const int indent) const override {
+            void printXml(std::ostream& out, const int indent) const override {
                 const std::string sp(indent, ' ');
                 // Left Term
-                left->print(out, indent + 4);
+                left->printXml(out, indent + 4);
 
                 // Operator - ESCAPED HERE
                 out << sp << "  <symbol> " << escapeXml(op) << " </symbol>\n";
 
                 // Right Term
-                right->print(out, indent + 4);
+                right->printXml(out, indent + 4);
             }
     };
 
@@ -298,10 +298,10 @@ namespace nand2tetris::jack {
      * Example: `-x`, `~found`
      */
     class UnaryOpNode final : public ExpressionNode {
-        public:
+        protected:
             char op; ///< The operator symbol ('-', '~').
             std::unique_ptr<ExpressionNode> term; ///< The operand.
-
+        public:
             /**
              * @brief Constructs a UnaryOpNode.
              * @param o The operator character.
@@ -310,11 +310,11 @@ namespace nand2tetris::jack {
             UnaryOpNode(const char o, std::unique_ptr<ExpressionNode> t)
                 : op(o), term(std::move(t)) {}
             ~UnaryOpNode() override = default;
-            void print(std::ostream& out, const int indent) const override {
+            void printXml(std::ostream& out, const int indent) const override {
                 const std::string sp(indent, ' ');
                 out << sp << "<term>\n";
                 out << sp << "  <symbol> " << op << " </symbol>\n";
-                term->print(out, indent + 2);
+                term->printXml(out, indent + 2);
                 out << sp << "</term>\n";
             }
     };
@@ -327,11 +327,11 @@ namespace nand2tetris::jack {
      * Example: `foo()`, `Math.sqrt(x)`, `obj.method()`
      */
     class CallNode final : public ExpressionNode {
-        public:
+        protected:
             std::string_view classNameOrVar; ///< The class name or variable name (optional). Empty if implicit `this`.
             std::string_view functionName;   ///< The name of the subroutine being called.
             std::vector<std::unique_ptr<ExpressionNode>> arguments; ///< The list of arguments passed to the call.
-
+        public:
             /**
              * @brief Constructs a CallNode.
              * @param cv The class or variable name (can be empty).
@@ -341,7 +341,7 @@ namespace nand2tetris::jack {
             CallNode(const std::string_view cv, const std::string_view fn, std::vector<std::unique_ptr<ExpressionNode>> args)
                 : classNameOrVar(cv), functionName(fn), arguments(std::move(args)) {}
             ~CallNode() override = default;
-            void print(std::ostream& out, const int indent) const override {
+            void printXml(std::ostream& out, const int indent) const override {
                 const std::string sp(indent, ' ');
                 out << sp << "<term>\n";
                 printRaw(out, indent + 2); // Call the helper
@@ -359,7 +359,7 @@ namespace nand2tetris::jack {
                 out << sp << "<expressionList>\n";
                 for (size_t i = 0; i < arguments.size(); ++i) {
                     out << sp << "  <expression>\n";
-                    arguments[i]->print(out, indent + 4);
+                    arguments[i]->printXml(out, indent + 4);
                     out << sp << "  </expression>\n";
                     if (i < arguments.size() - 1) {
                         out << sp << "  <symbol> , </symbol>\n";
@@ -376,10 +376,10 @@ namespace nand2tetris::jack {
      * Example: `x`, `arr[i]`
      */
     class IdentifierNode final : public ExpressionNode {
-        public:
+        protected:
             std::string_view name; ///< The name of the identifier.
             std::unique_ptr<ExpressionNode> indexExpr; ///< The index expression if it's an array access, otherwise nullptr.
-
+        public:
             /**
              * @brief Constructs an IdentifierNode.
              * @param n The identifier name.
@@ -388,17 +388,17 @@ namespace nand2tetris::jack {
             explicit IdentifierNode(const std::string_view n, std::unique_ptr<ExpressionNode> idx = nullptr)
                 : name(n), indexExpr(std::move(idx)) {}
             ~IdentifierNode() override = default;
-            void print(std::ostream& out, const int indent) const override {
+            void printXml(std::ostream& out, const int indent) const override {
 
                 const std::string sp(indent, ' ');
                 out << sp << "<term>\n";  // Add Wrapper
-                out << sp << "<identifier> " << name << " </identifier>\n";
+                out << sp << "  <identifier> " << name << " </identifier>\n";
                 if (indexExpr) {
-                    out << sp << "<symbol> [ </symbol>\n";
+                    out << sp << "  <symbol> [ </symbol>\n";
                     out << sp << "  <expression>\n";
-                    indexExpr->print(out, indent + 4);
+                    indexExpr->printXml(out, indent + 4);
                     out << sp << "  </expression>\n";
-                    out << sp << "<symbol> ] </symbol>\n";
+                    out << sp << "  <symbol> ] </symbol>\n";
                 }
                 out << sp << "</term>\n"; // Add Wrapper
             }
@@ -410,11 +410,11 @@ namespace nand2tetris::jack {
      * Example: `let x = 5;`, `let arr[i] = y;`
      */
     class LetStatementNode final : public StatementNode {
-        public:
+        protected:
             std::string_view varName; ///< The name of the variable being assigned to.
             std::unique_ptr<ExpressionNode> indexExpr; ///< The index expression for array assignment (optional).
             std::unique_ptr<ExpressionNode> valueExpr; ///< The expression evaluating to the new value.
-
+        public:
             /**
              * @brief Constructs a LetStatementNode.
              * @param name The variable name.
@@ -425,7 +425,7 @@ namespace nand2tetris::jack {
                              std::unique_ptr<ExpressionNode> val)
                 : varName(name), indexExpr(std::move(idx)), valueExpr(std::move(val)) {}
             ~LetStatementNode() override = default;
-            void print(std::ostream& out, const int indent) const override {
+            void printXml(std::ostream& out, const int indent) const override {
                 const std::string sp(indent, ' ');
                 out << sp << "<letStatement>\n";
                 out << sp << "  <keyword> let </keyword>\n";
@@ -434,14 +434,14 @@ namespace nand2tetris::jack {
                 if (indexExpr) {
                     out << sp << "  <symbol> [ </symbol>\n";
                     out << sp << "  <expression>\n";
-                    indexExpr->print(out, indent + 4);
+                    indexExpr->printXml(out, indent + 4);
                     out << sp << "  </expression>\n";
                     out << sp << "  <symbol> ] </symbol>\n";
                 }
 
                 out << sp << "  <symbol> = </symbol>\n";
                 out << sp << "  <expression>\n";
-                valueExpr->print(out, indent + 4);
+                valueExpr->printXml(out, indent + 4);
                 out << sp << "  </expression>\n";
                 out << sp << "  <symbol> ; </symbol>\n";
                 out << sp << "</letStatement>\n";
@@ -454,11 +454,11 @@ namespace nand2tetris::jack {
      * Example: `if (x > 0) { ... } else { ... }`
      */
     class IfStatementNode final : public StatementNode {
-        public:
+        protected:
             std::unique_ptr<ExpressionNode> condition; ///< The condition expression.
             std::vector<std::unique_ptr<StatementNode>> ifStatements; ///< The statements to execute if true.
             std::vector<std::unique_ptr<StatementNode>> elseStatements; ///< The statements to execute if false (optional).
-
+        public:
             /**
              * @brief Constructs an IfStatementNode.
              * @param cond The condition.
@@ -469,19 +469,19 @@ namespace nand2tetris::jack {
                             std::vector<std::unique_ptr<StatementNode>> elseStmts)
                 : condition(std::move(cond)), ifStatements(std::move(ifStmts)), elseStatements(std::move(elseStmts)) {};
             ~IfStatementNode() override = default;
-            void print(std::ostream& out, const int indent) const override {
+            void printXml(std::ostream& out, const int indent) const override {
                 const std::string sp(indent, ' ');
                 out << sp << "<ifStatement>\n";
                 out << sp << "  <keyword> if </keyword>\n";
                 out << sp << "  <symbol> ( </symbol>\n";
                 out << sp << "  <expression>\n";
-                condition->print(out, indent + 2);
+                condition->printXml(out, indent + 2);
                 out << sp << "  </expression>\n";
                 out << sp << "  <symbol> ) </symbol>\n";
 
                 out << sp << "  <symbol> { </symbol>\n";
                 out << sp << "  <statements>\n";
-                for (const auto& stmt : ifStatements) stmt->print(out, indent + 4);
+                for (const auto& stmt : ifStatements) stmt->printXml(out, indent + 4);
                 out << sp << "  </statements>\n";
                 out << sp << "  <symbol> } </symbol>\n";
 
@@ -489,7 +489,7 @@ namespace nand2tetris::jack {
                     out << sp << "  <keyword> else </keyword>\n";
                     out << sp << "  <symbol> { </symbol>\n";
                     out << sp << "  <statements>\n";
-                    for (const auto& stmt : elseStatements) stmt->print(out, indent + 4);
+                    for (const auto& stmt : elseStatements) stmt->printXml(out, indent + 4);
                     out << sp << "  </statements>\n";
                     out << sp << "  <symbol> } </symbol>\n";
                 }
@@ -503,10 +503,10 @@ namespace nand2tetris::jack {
      * Example: `while (x > 0) { ... }`
      */
     class WhileStatementNode final : public StatementNode {
-        public:
+        protected:
             std::unique_ptr<ExpressionNode> condition; ///< The loop condition.
             std::vector<std::unique_ptr<StatementNode>> body; ///< The loop body statements.
-
+        public:
             /**
              * @brief Constructs a WhileStatementNode.
              * @param cond The condition.
@@ -515,19 +515,19 @@ namespace nand2tetris::jack {
             WhileStatementNode(std::unique_ptr<ExpressionNode> cond, std::vector<std::unique_ptr<StatementNode>> b)
                 : condition(std::move(cond)), body(std::move(b)) {}
             ~WhileStatementNode() override = default;
-            void print(std::ostream& out, const int indent) const override {
+            void printXml(std::ostream& out, const int indent) const override {
                 const std::string sp(indent, ' ');
                 out << sp << "<whileStatement>\n";
                 out << sp << "  <keyword> while </keyword>\n";
                 out << sp << "  <symbol> ( </symbol>\n";
                 out << sp << "  <expression>\n";
-                condition->print(out, indent + 2);
+                condition->printXml(out, indent + 2);
                 out << sp << "  </expression>\n";
                 out << sp << "  <symbol> ) </symbol>\n";
 
                 out << sp << "  <symbol> { </symbol>\n";
                 out << sp << "  <statements>\n";
-                for (const auto& stmt : body) stmt->print(out, indent + 4);
+                for (const auto& stmt : body) stmt->printXml(out, indent + 4);
                 out << sp << "  </statements>\n";
                 out << sp << "  <symbol> } </symbol>\n";
                 out << sp << "</whileStatement>\n";
@@ -541,16 +541,16 @@ namespace nand2tetris::jack {
      * 'do' statements are used to call subroutines for their side effects, ignoring the return value.
      */
     class DoStatementNode final : public StatementNode {
-        public:
+        protected:
             std::unique_ptr<CallNode> callExpression; ///< The subroutine call expression.
-
+        public:
             /**
              * @brief Constructs a DoStatementNode.
              * @param call The call expression.
              */
             explicit DoStatementNode(std::unique_ptr<CallNode> call) : callExpression(std::move(call)) {}
             ~DoStatementNode() override = default;
-            void print(std::ostream& out, const int indent) const override {
+            void printXml(std::ostream& out, const int indent) const override {
                 const std::string sp(indent, ' ');
                 out << sp << "<doStatement>\n";
                 out << sp << "  <keyword> do </keyword>\n";
@@ -569,23 +569,23 @@ namespace nand2tetris::jack {
      * Example: `return;`, `return x + 1;`
      */
     class ReturnStatementNode final : public StatementNode {
-        public:
+        protected:
             std::unique_ptr<ExpressionNode> expression; ///< The return value expression (optional).
-
+        public:
             /**
              * @brief Constructs a ReturnStatementNode.
              * @param expr The return expression (can be nullptr).
              */
             explicit ReturnStatementNode(std::unique_ptr<ExpressionNode> expr) : expression(std::move(expr)) {}
             ~ReturnStatementNode() override = default;
-            void print(std::ostream& out, const int indent) const override {
+            void printXml(std::ostream& out, const int indent) const override {
                 const std::string sp(indent, ' ');
                 out << sp << "<returnStatement>\n";
                 out << sp << "  <keyword> return </keyword>\n";
 
                 if (expression) {
                     out << sp << "  <expression>\n";
-                    expression->print(out, indent + 2);
+                    expression->printXml(out, indent + 2);
                     out << sp << "  </expression>\n";
                 }
 
@@ -598,7 +598,7 @@ namespace nand2tetris::jack {
      * @brief Represents a subroutine declaration (constructor, function, or method).
      */
     class SubroutineDecNode final : public Node {
-        public:
+        protected:
             SubroutineType subType; ///< The type of subroutine (constructor, function, method).
             std::string_view returnType; ///< The return type (e.g., "void", "int", "MyClass").
             std::string_view name; ///< The name of the subroutine.
@@ -606,7 +606,7 @@ namespace nand2tetris::jack {
 
             std::vector<std::unique_ptr<VarDecNode>> localVars; ///< The local variable declarations.
             std::vector<std::unique_ptr<StatementNode>> statements; ///< The body statements.
-
+        public:
             /**
              * @brief Constructs a SubroutineDecNode.
              * @param st The subroutine type.
@@ -624,7 +624,7 @@ namespace nand2tetris::jack {
 
             ~SubroutineDecNode() override = default;
 
-            void print(std::ostream& out, const int indent) const override {
+            void printXml(std::ostream& out, const int indent) const override {
                 const std::string sp(indent, ' ');
                 out << sp << "<subroutineDec>\n";
                 const std::string typeStr = (subType == SubroutineType::CONSTRUCTOR ? "constructor" :
@@ -652,9 +652,9 @@ namespace nand2tetris::jack {
                 out << sp << "  <symbol> ) </symbol>\n";
                 out << sp << "  <subroutineBody>\n";
                 out << sp << "    <symbol> { </symbol>\n";
-                for (const auto& var : localVars) var->print(out, indent + 4);
+                for (const auto& var : localVars) var->printXml(out, indent + 4);
                 out << sp << "    <statements>\n";
-                for (const auto& stmt : statements) stmt->print(out, indent + 6);
+                for (const auto& stmt : statements) stmt->printXml(out, indent + 6);
                 out << sp << "    </statements>\n";
                 out << sp << "    <symbol> } </symbol>\n";
                 out << sp << "  </subroutineBody>\n";
@@ -668,27 +668,35 @@ namespace nand2tetris::jack {
      * This is the root node of the AST for a single file.
      */
     class ClassNode final : public Node {
-        public:
+        protected:
             std::string_view className; ///< The name of the class.
             std::vector<std::unique_ptr<ClassVarDecNode>> classVars; ///< The class-level variable declarations.
             std::vector<std::unique_ptr<SubroutineDecNode>> subroutineDecs; ///< The subroutine declarations.
-
+        public:
             /**
              * @brief Constructs a ClassNode.
              * @param className The name of the class.
+             * @param classVars The list of class variables (Static and Field)
+             * @param subroutineDecs The list of subroutine declarations (constructors, method, function)
              */
-            explicit ClassNode(const std::string_view className) : className(className) {};
+            explicit ClassNode(const std::string_view className,std::vector<std::unique_ptr<ClassVarDecNode>>
+                classVars,std::vector<std::unique_ptr<SubroutineDecNode>> subroutineDecs) : className(className),
+                classVars(std::move(classVars)), subroutineDecs(std::move(subroutineDecs)) {};
             ~ClassNode() override = default;
-            void print(std::ostream& out, int indent)const override {
+            void printXml(std::ostream& out, int indent)const override {
                 out << "<class>\n";
                 out << "  <keyword> class </keyword>\n";
                 out << "  <identifier> " << className << " </identifier>\n";
                 out << "  <symbol> { </symbol>\n";
-                for (const auto& var : classVars) var->print(out, 2);
-                for (const auto& sub : subroutineDecs) sub->print(out, 2);
+                for (const auto& var : classVars) var->printXml(out, 2);
+                for (const auto& sub : subroutineDecs) sub->printXml(out, 2);
                 out << "  <symbol> } </symbol>\n";
                 out << "</class>\n";
             }
+            std::string_view getClassName()const { return className; }
+            std::size_t get_Number_of_Subroutines()const {return subroutineDecs.size();}
+            std::size_t get_Number_of_classVars() const {return classVars.size();}
+
     };
 }
 

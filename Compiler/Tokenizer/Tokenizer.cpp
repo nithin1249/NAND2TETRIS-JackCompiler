@@ -220,41 +220,6 @@ namespace nand2tetris::jack {
         return std::make_unique<IntToken>(value, tokenline, tokencolumn);
     }
 
-    bool Tokenizer::isKeywordString(const std::string_view s, Keyword& outKw) {
-        // Map string representations to their enum values.
-        static const std::unordered_map<std::string_view, Keyword> keywordMap = {
-            {"class",       Keyword::CLASS},
-            {"method",      Keyword::METHOD},
-            {"function",    Keyword::FUNCTION},
-            {"constructor", Keyword::CONSTRUCTOR},
-            {"int",         Keyword::INT},
-            {"boolean",     Keyword::BOOLEAN},
-            {"char",        Keyword::CHAR},
-            {"void",        Keyword::VOID},
-            {"var",         Keyword::VAR},
-            {"static",      Keyword::STATIC},
-            {"field",       Keyword::FIELD},
-            {"let",         Keyword::LET},
-            {"do",          Keyword::DO},
-            {"if",          Keyword::IF},
-            {"else",        Keyword::ELSE},
-            {"while",       Keyword::WHILE},
-            {"return",      Keyword::RETURN},
-            {"true",        Keyword::TRUE_},
-            {"false",       Keyword::FALSE_},
-            {"null",        Keyword::NULL_},
-            {"this",        Keyword::THIS_}
-        };
-
-        const auto it = keywordMap.find(s);
-        if (it != keywordMap.end()) {
-            outKw = it->second;
-            return true;
-        }
-
-        return false;
-    }
-
     std::unique_ptr<Token> Tokenizer::readIdentifierOrKeyword(const std::size_t tokenline, const std::size_t tokencolumn) {
         const std::size_t start = pos;
         // Consume alphanumeric characters and underscores.

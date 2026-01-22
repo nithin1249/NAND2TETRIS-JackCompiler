@@ -67,7 +67,8 @@ namespace nand2tetris::jack {
         // 3. Expect opening brace '{'
         consume("{", "Expected '{'");
 
-        auto node=std::make_unique<ClassNode>(className);
+        std::vector<std::unique_ptr<ClassVarDecNode>> classVars;
+        std::vector<std::unique_ptr<SubroutineDecNode>> subroutineDecs;
 
         // 4. Parse class body: variable declarations followed by subroutine declarations.
         // We loop until we hit the closing brace '}'.
@@ -76,9 +77,9 @@ namespace nand2tetris::jack {
 
             // Distinguish between class variables (static/field) and subroutines (constructor/method/function).
             if (val=="static"||val=="field") {
-                node->classVars.push_back(compileClassVarDec());
+                classVars.push_back(compileClassVarDec());
             }else if (val=="constructor"||val=="method"||val=="function") {
-                node->subroutineDecs.push_back(compileSubroutine());
+                subroutineDecs.push_back(compileSubroutine());
             }else {
                 // If we encounter anything else, it's a syntax error.
                 tokenizer.errorAt(currentToken->getLine(),currentToken->getColumn(), "Expected class variable or subroutine declaration");
@@ -88,7 +89,7 @@ namespace nand2tetris::jack {
         // 5. Expect closing brace '}'
         consume("}", "Expected '}' to close class body");
 
-        return node;
+        return std::make_unique<ClassNode>(className, std::move(classVars), std::move(subroutineDecs));
     }
 
     std::unique_ptr<ClassVarDecNode> Parser::compileClassVarDec() {
