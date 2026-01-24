@@ -8,6 +8,8 @@
 #include "../Tokenizer/Tokenizer.h"
 #include "../Tokenizer/TokenTypes.h"
 #include "AST.h"
+#include "../SemanticAnalyser/GlobalRegistry.h"
+
 
 namespace nand2tetris::jack {
 
@@ -20,6 +22,7 @@ namespace nand2tetris::jack {
      */
     class Parser {
         Tokenizer& tokenizer;           ///< Reference to the tokenizer providing the token stream.
+        GlobalRegistry& globalRegistry;
         const Token* currentToken = nullptr; ///< Pointer to the current token being processed.
 
         // --- Helper Methods ---
@@ -212,13 +215,16 @@ namespace nand2tetris::jack {
          */
         bool isBinaryOp() const;
 
+        std::string_view currentClassName;
+
         public:
             /**
              * @brief Constructs a Parser with a given Tokenizer.
              *
              * @param tokenizer The tokenizer instance to use.
+             * @param registry
              */
-            explicit Parser(Tokenizer& tokenizer);
+            explicit Parser(Tokenizer& tokenizer, GlobalRegistry &registry);
 
             /**
              * @brief Parses the entire token stream into an Abstract Syntax Tree.

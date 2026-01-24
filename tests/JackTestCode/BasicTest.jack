@@ -13,7 +13,13 @@ class BasicTest {
 
     method void run() {
         var int i;
+        var boolean x,y,z,w;
         let i = 0;
+        let x=true;
+        let y=true;
+        let z=true;
+        let w=x&y&z;
+
         while (i < 10) {
             do Output.printInt(i);
             let i = i + 1;

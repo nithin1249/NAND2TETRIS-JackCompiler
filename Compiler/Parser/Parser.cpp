@@ -6,7 +6,7 @@
 #include <numeric>
 
 namespace nand2tetris::jack {
-    Parser::Parser(Tokenizer &tokenizer):tokenizer(tokenizer) {
+    Parser::Parser(Tokenizer &tokenizer, GlobalRegistry& registry):tokenizer(tokenizer),globalRegistry(registry) {
         // Initialize the parser by pointing to the first token available in the tokenizer.
         // The tokenizer is assumed to be already initialized and pointing to the first token.
         currentToken=&tokenizer.current();
@@ -56,6 +56,8 @@ namespace nand2tetris::jack {
 
     std::unique_ptr<ClassNode> Parser::compileClass() {
         // Grammar: 'class' className '{' classVarDec* subroutineDec* '}'
+        int line = currentToken->getLine();
+        int col = currentToken->getColumn();
 
         // 1. Expect 'class' keyword
         consume("class", "Expected 'class' keyword");
@@ -63,6 +65,9 @@ namespace nand2tetris::jack {
         // 2. Expect class name (identifier)
         std::string_view className = currentToken->getValue();
         consume(TokenType::IDENTIFIER, "Expected class name");
+
+        currentClassName=className;
+        globalRegistry.registerClass(className);
 
         // 3. Expect opening brace '{'
         consume("{", "Expected '{'");
@@ -89,11 +94,13 @@ namespace nand2tetris::jack {
         // 5. Expect closing brace '}'
         consume("}", "Expected '}' to close class body");
 
-        return std::make_unique<ClassNode>(className, std::move(classVars), std::move(subroutineDecs));
+        return std::make_unique<ClassNode>(className, std::move(classVars), std::move(subroutineDecs), line, col);
     }
 
     std::unique_ptr<ClassVarDecNode> Parser::compileClassVarDec() {
         // Grammar: ('static' | 'field') type varName (',' varName)* ';'
+        int line = currentToken->getLine();
+        int col = currentToken->getColumn();
 
         // 1. Determine if it's a static or field variable.
         // We assume the caller has already verified the token is "static" or "field".
@@ -143,12 +150,14 @@ namespace nand2tetris::jack {
         // 4. Expect the closing semicolon.
         consume(";", "Expected ';' at the end of variable declaration");
 
-        return std::make_unique<ClassVarDecNode>(kind, type, std::move(names));
+        return std::make_unique<ClassVarDecNode>(kind, type, std::move(names), line, col);
     }
 
     std::unique_ptr<SubroutineDecNode> Parser::compileSubroutine() {
         // Grammar: ('constructor' | 'function' | 'method') ('void' | type) subroutineName '(' parameterList ')'
         // subroutineBody: '{' varDec* statements '}'
+        int line = currentToken->getLine();
+        int col = currentToken->getColumn();
 
         // 1. Determine the subroutine type (constructor, function, or method).
         SubroutineType type;
@@ -220,6 +229,25 @@ namespace nand2tetris::jack {
 
         consume(")", "Expected ')' to close parameter list");
 
+        //Convert AST Parameters to String Vector for Registry
+        std::vector<std::string_view> paramTypes;
+        paramTypes.reserve(parameters.size());
+        for (const auto& p : parameters) {
+            paramTypes.push_back(p.type);
+        }
+
+        const bool isStatic = (type == SubroutineType::FUNCTION || type == SubroutineType::CONSTRUCTOR);
+
+        globalRegistry.registerMethod(
+        currentClassName,      // We saved this in compileClass
+        subroutineName,        // Parsed earlier in this function
+        returnType,            // Parsed earlier in this function
+        paramTypes,            // Created just now
+        isStatic,
+        line,                  // From start of subroutine
+        col
+    );
+
         // 5. Parse the subroutine body.
         consume("{","Expected '{' to open subroutine body");
 
@@ -235,16 +263,18 @@ namespace nand2tetris::jack {
 
         consume("}","Expected '}' to close subroutine body");
 
-        return std::make_unique<SubroutineDecNode>(type,returnType,subroutineName,parameters,std::move(localVars),std::move(statements));
+        return std::make_unique<SubroutineDecNode>(type,returnType,subroutineName,parameters,std::move(localVars),std::move(statements), line, col);
     }
 
     std::unique_ptr<VarDecNode> Parser::compileVarDec() {
         // Grammar: 'var' type varName (',' varName)* ';'
+        int line = currentToken->getLine();
+        int col = currentToken->getColumn();
 
         // 1. Consume 'var' keyword.
         consume("var", "Expected 'var' keyword");
 
-        // 2. Parse the type (int, char, boolean, or class name).
+        // 2. Parse the type (int, char, boolean, or a class name).
         std::string_view type = currentToken->getValue();
         if (check("int")||check("boolean")||check("char")||check(TokenType::IDENTIFIER)) {
             advance();
@@ -278,7 +308,7 @@ namespace nand2tetris::jack {
         // 4. Expect the closing semicolon.
         consume(";", "Expected ';' at the end of variable declaration");
 
-        return std::make_unique<VarDecNode>(type,std::move(names));
+        return std::make_unique<VarDecNode>(type,std::move(names), line, col);
     }
 
     std::vector<std::unique_ptr<StatementNode>> Parser::compileStatements() {
@@ -312,6 +342,8 @@ namespace nand2tetris::jack {
 
     std::unique_ptr<LetStatementNode> Parser::compileLetStatement() {
         // Grammar: 'let' varName ('[' expression ']')? '=' expression ';'
+        int line = currentToken->getLine();
+        int col = currentToken->getColumn();
 
         //move past let:
         consume("let","Expected a 'let' keyword");
@@ -344,11 +376,13 @@ namespace nand2tetris::jack {
 
         consume(";", "Expected ';' at end of let statement");
 
-        return std::make_unique<LetStatementNode>(varName, std::move(indexExpr), std::move(exp));
+        return std::make_unique<LetStatementNode>(varName, std::move(indexExpr), std::move(exp), line, col);
     }
 
     std::unique_ptr<IfStatementNode> Parser::compileIfStatement() {
         // Grammar: 'if' '(' expression ')' '{' statements '}' ('else' '{' statements '}')?
+        int line = currentToken->getLine();
+        int col = currentToken->getColumn();
 
         consume("if", "Expected 'if' keyword");
 
@@ -378,12 +412,14 @@ namespace nand2tetris::jack {
             consume("}", "Expected '}' to close else-block");
         }
 
-        return std::make_unique<IfStatementNode>(std::move(condition), std::move(ifStatements), std::move(elseStatements));
+        return std::make_unique<IfStatementNode>(std::move(condition), std::move(ifStatements), std::move(elseStatements), line, col);
     }
 
 
     std::unique_ptr<WhileStatementNode> Parser::compileWhileStatement() {
         // Grammar: 'while' '(' expression ')' '{' statements '}'
+        int line = currentToken->getLine();
+        int col = currentToken->getColumn();
 
         consume("while", "Expected 'while' keyword");
 
@@ -400,11 +436,13 @@ namespace nand2tetris::jack {
         std::vector<std::unique_ptr<StatementNode>> body = compileStatements();
         consume("}", "Expected '}' to close while-loop body");
 
-        return std::make_unique<WhileStatementNode>(std::move(condition), std::move(body));
+        return std::make_unique<WhileStatementNode>(std::move(condition), std::move(body), line, col);
     }
 
     std::unique_ptr<ReturnStatementNode> Parser::compileReturnStatement() {
         // Grammar: 'return' expression? ';'
+        int line = currentToken->getLine();
+        int col = currentToken->getColumn();
 
         consume("return", "Expected 'return' keyword");
 
@@ -426,22 +464,27 @@ namespace nand2tetris::jack {
         // 2. Final check for the semicolon
         consume(";", "Expected ';' after return statement");
 
-        return std::make_unique<ReturnStatementNode>(std::move(value));
+        return std::make_unique<ReturnStatementNode>(std::move(value), line, col);
     }
 
 
     std::unique_ptr<DoStatementNode> Parser::compileDoStatement() {
         //Grammar: `do' subroutineName '('expressionList')'|(className|varName)`.` subroutineName
+        int line = currentToken->getLine();
+        int col = currentToken->getColumn();
+
         consume("do","Expected 'do' keyword");
         std::unique_ptr<CallNode> call = compileSubroutineCall();
         consume(";", "Expected ';' after do subroutine call");
-        return std::make_unique<DoStatementNode>(std::move(call));
+        return std::make_unique<DoStatementNode>(std::move(call), line, col);
 
     }
 
     std::unique_ptr<ExpressionNode> Parser::compileExpression() {
         // Grammar: term (op term)*
         // op: + - * / & | < > =
+        int line = currentToken->getLine();
+        int col = currentToken->getColumn();
 
         // 1. Compile the first term
         std::unique_ptr<ExpressionNode> left_term=compileTerm();
@@ -454,7 +497,7 @@ namespace nand2tetris::jack {
 
             // Wrap the existing 'left' and the new 'right' into a new BinaryOpNode
             // This handles left-associativity (e.g., 1 + 2 + 3)
-            left_term = std::make_unique<BinaryOpNode>(std::move(left_term), op, std::move(right_term));
+            left_term = std::make_unique<BinaryOpNode>(std::move(left_term), op, std::move(right_term), line, col);
         }
 
         return left_term;
@@ -476,20 +519,22 @@ namespace nand2tetris::jack {
     std::unique_ptr<ExpressionNode> Parser::compileTerm() {
         // Grammar: integerConstant | stringConstant | keywordConstant | varName |
         //          varName '[' expression ']' | subroutineCall | '(' expression ')' | unaryOp term
+        int line = currentToken->getLine();
+        int col = currentToken->getColumn();
 
         // 1. Integer Constant
         if (check(TokenType::INT_CONST)) {
             const std::string_view valView = currentToken->getValue();
             int val = std::accumulate(valView.begin(), valView.end(), 0, [](int res, char c) { return res * 10 + (c - '0'); });
             advance();
-            return std::make_unique<IntegerLiteralNode>(val);
+            return std::make_unique<IntegerLiteralNode>(val, line, col);
         }
 
         // 2. String Constant
         if (check(TokenType::STRING_CONST)) {
             std::string_view val = currentToken->getValue();
             advance();
-            return std::make_unique<StringLiteralNode>(val);
+            return std::make_unique<StringLiteralNode>(val, line, col);
         }
 
         // 3. Keyword Constant (true, false, null, this)
@@ -498,16 +543,16 @@ namespace nand2tetris::jack {
 
             if (val == "true") {
                 advance();
-                return std::make_unique<KeywordLiteralNode>(Keyword::TRUE_);
+                return std::make_unique<KeywordLiteralNode>(Keyword::TRUE_, line, col);
             } else if (val == "false") {
                 advance();
-                return std::make_unique<KeywordLiteralNode>(Keyword::FALSE_);
+                return std::make_unique<KeywordLiteralNode>(Keyword::FALSE_, line, col);
             } else if (val == "null") {
                 advance();
-                return std::make_unique<KeywordLiteralNode>(Keyword::NULL_);
+                return std::make_unique<KeywordLiteralNode>(Keyword::NULL_, line, col);
             } else if (val == "this") {
                 advance();
-                return std::make_unique<KeywordLiteralNode>(Keyword::THIS_);
+                return std::make_unique<KeywordLiteralNode>(Keyword::THIS_, line, col);
             }else {
                 tokenizer.errorAt(currentToken->getLine(),currentToken->getColumn(),"Inappropriate keyword used in expression.");
             }
@@ -526,14 +571,14 @@ namespace nand2tetris::jack {
                 advance(); // consume '['
                 std::unique_ptr<ExpressionNode> exp=compileExpression();
                 consume("]", "Expected ']' after array index");
-                return std::make_unique<IdentifierNode>(name, std::move(exp));
+                return std::make_unique<IdentifierNode>(name, line, col, std::move(exp));
             }else if (next.getValue()=="("||next.getValue()==".") {
                 // Subroutine Call
                 return compileSubroutineCall();
             }else {
                 // Simple Variable
                 advance();
-                return std::make_unique<IdentifierNode>(name);
+                return std::make_unique<IdentifierNode>(name, line, col);
             }
         }
 
@@ -550,7 +595,7 @@ namespace nand2tetris::jack {
             char op = currentToken->getValue()[0];
             advance();
             std::unique_ptr<ExpressionNode> term = compileTerm();
-            return std::make_unique<UnaryOpNode>(op, std::move(term));
+            return std::make_unique<UnaryOpNode>(op, std::move(term), line, col);
         }
 
         const std::string err = "Expected an expression term, but found '" + std::string(currentToken->getValue()) + "'";
@@ -591,6 +636,9 @@ namespace nand2tetris::jack {
     }
 
     std::unique_ptr<CallNode> Parser::compileSubroutineCall() {
+        int line = currentToken->getLine();
+        int col = currentToken->getColumn();
+
         // Save the first identifier to determine context later
         const std::string_view firstPart = currentToken->getValue();
         consume(TokenType::IDENTIFIER, "Expected subroutine, class, or variable name");
@@ -619,7 +667,7 @@ namespace nand2tetris::jack {
         consume(")", "Expected ')' to close argument list");
 
         // Return the AST node with all captured information
-        return std::make_unique<CallNode>(classNameOrVar, subroutineName, std::move(agrs));
+        return std::make_unique<CallNode>(classNameOrVar, subroutineName, std::move(agrs), line, col);
     }
     
 }

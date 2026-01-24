@@ -28,9 +28,31 @@ add_executable(jack_parser
         Compiler/Tokenizer/Tokenizer.cpp
         Compiler/Tokenizer/Tokenizer.h
         Compiler/Tokenizer/TokenTypes.h
+        Compiler/SemanticAnalyser/GlobalRegistry.h
+        Compiler/SemanticAnalyser/GlobalRegistry.cpp
         Compiler/Parser/AST.h
         Compiler/Parser/Parser.cpp
         Compiler/Parser/Parser.h
         tests/JackParserTest/jack_parser.cpp
 )
+
+add_executable(jack_semantic
+        Compiler/Tokenizer/Tokenizer.cpp
+        Compiler/Tokenizer/Tokenizer.h
+        Compiler/Tokenizer/TokenTypes.h
+        Compiler/Parser/AST.h
+        Compiler/Parser/Parser.cpp
+        Compiler/Parser/Parser.h
+        Compiler/SemanticAnalyser/SymbolTable.cpp
+        Compiler/SemanticAnalyser/SymbolTable.h
+        Compiler/SemanticAnalyser/GlobalRegistry.cpp
+        Compiler/SemanticAnalyser/GlobalRegistry.h
+        Compiler/SemanticAnalyser/SemanticAnalyser.cpp
+        Compiler/SemanticAnalyser/SemanticAnalyser.h
+        tests/JackSemanticAnalyser/jack_semantic.cpp
+)
+
+
+
+
 

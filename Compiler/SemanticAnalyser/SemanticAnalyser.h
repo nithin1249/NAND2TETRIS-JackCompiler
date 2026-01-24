@@ -24,23 +24,27 @@ namespace nand2tetris::jack{
 			std::string_view currentSubroutineName;
 			std::string_view currentSubroutineKind; // "function", "method", "constructor"
 
+			[[noreturn]] void error(std::string_view message, const Node& node) const;
+
+			void checkTypeMatch(std::string_view expected, std::string_view actual,const Node& locationNode) const;
+
+
 			void analyseSubroutine(const SubroutineDecNode& sub, const SymbolTable& masterTable);
 
-			void analyzeStatements(const std::vector<std::unique_ptr<StatementNode>>& stmts, SymbolTable& table);
-			void analyzeLet(const LetStatementNode& node, SymbolTable& table);
-			void analyzeIf(const IfStatementNode& node, SymbolTable& table);
-			void analyzeWhile(const WhileStatementNode& node, SymbolTable& table);
-			void analyzeDo(const DoStatementNode& node, SymbolTable& table);
-			void analyzeReturn(const ReturnStatementNode& node, SymbolTable& table);
+			void analyseStatements(const std::vector<std::unique_ptr<StatementNode>>& stmts, SymbolTable& table) const;
+			void analyseLet(const LetStatementNode& node, SymbolTable& table)const;
+			void analyseIf(const IfStatementNode& node, SymbolTable& table)const;
+			void analyseWhile(const WhileStatementNode& node, SymbolTable& table)const;
+			void analyseDo(const DoStatementNode& node, SymbolTable& table)const;
+			void analyseReturn(const ReturnStatementNode& node, SymbolTable& table) const;
 
-			std::string_view analyzeExpression(const ExpressionNode& node, SymbolTable& table);
-			std::string_view analyzeTerm(const ExpressionNode& node, SymbolTable& table);
+			std::string_view analyseExpression(const ExpressionNode& node, SymbolTable& table)const;
 
-			std::string_view analyzeSubroutineCall(std::string_view name1,
-										   std::string_view name2,
-										   const std::vector<std::unique_ptr<ExpressionNode>>& args,
-										   SymbolTable& table, int line);
-			void checkTypeMatch(std::string_view expected, std::string_view actual, int line);
+			std::string_view analyseSubroutineCall(std::string_view classNameOrVar,
+											   std::string_view functionName,
+											   const std::vector<std::unique_ptr<ExpressionNode>>& args,
+											   SymbolTable& table,
+											   const Node& locationNode)const;
 	};
 }
 

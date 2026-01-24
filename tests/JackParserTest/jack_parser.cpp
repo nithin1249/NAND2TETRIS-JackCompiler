@@ -25,8 +25,10 @@ int main(int argc, char* argv[]) {
 		// Ensure your Tokenizer constructor/setup matches this
 		Tokenizer tokenizer(argv[1]);
 
+		GlobalRegistry globalRegistry;
+
 		// 2. Initialize Parser
-		Parser parser(tokenizer);
+		Parser parser(tokenizer,globalRegistry);
 
 		std::cout << "Parsing file: " << argv[1] << "..." << std::endl;
 

@@ -12,7 +12,7 @@ namespace nand2tetris::jack {
     }
 
     void GlobalRegistry::registerMethod(const std::string_view className, const std::string_view methodName,
-        const std::string_view returnType, const std::vector<std::string_view> &params, const bool isStatic, const bool isConstructor, const int
+        const std::string_view returnType, const std::vector<std::string_view> &params, const bool isStatic,const int
         line, const int column) {
         std::scoped_lock lock(mtx);
 
@@ -23,13 +23,13 @@ namespace nand2tetris::jack {
                 "Semantic Error [" + std::to_string(line) + ":" + std::to_string(column) + "]: " +
                 "Subroutine '" + std::string(methodName) + "' is already defined in class '" +
                 std::string(className) + "' (Previous declaration at line " +
-                std::to_string(existing.line) + ").";
+                std::to_string(existing.line)+" "+std::to_string(existing.column) + ").";
 
             throw std::runtime_error(msg);
         }
 
         // Store the method signature.
-        methods[className][methodName] = {returnType, params, isConstructor,isStatic, line,column};
+        methods[className][methodName] = {returnType, params, isStatic, line,column};
     }
 
     bool GlobalRegistry::classExists(const std::string_view className) const {
@@ -59,7 +59,8 @@ namespace nand2tetris::jack {
         return it->second.contains(methodName);
     }
 
-    MethodSignature GlobalRegistry::getSignature(const std::string_view className, const std::string_view methodName) {
+    MethodSignature GlobalRegistry::getSignature(const std::string_view className,
+                                                 const std::string_view methodName) const {
         // Look up the class.
         const auto it=methods.find(className);
         if (it!=methods.end()) {
@@ -71,5 +72,9 @@ namespace nand2tetris::jack {
         }
         // If not found, this indicates a logic error in the compiler (caller should have checked existence).
         throw std::runtime_error("Internal Compiler Error: Signature lookup failed for " + std::string(className) + "." + std::string(methodName));
+    }
+
+    int GlobalRegistry::getClassCount() const {
+        return static_cast<int>(classes.size());
     }
 }

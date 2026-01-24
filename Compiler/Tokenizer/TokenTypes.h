@@ -6,7 +6,6 @@
 #define NAND2TETRIS_TOKEN_H
 
 #include <string>
-#include <cstddef>
 #include <unordered_map>
 
 namespace nand2tetris::jack {
@@ -135,8 +134,8 @@ namespace nand2tetris::jack {
     struct Token {
         protected:
             TokenType type = TokenType::END_OF_FILE; ///< The type of the token.
-            std::size_t line;                        ///< The line number where the token appears.
-            std::size_t column;                      ///< The column number where the token appears.
+            int line;                        ///< The line number where the token appears.
+            int column;                      ///< The column number where the token appears.
 
         public:
             /**
@@ -146,7 +145,7 @@ namespace nand2tetris::jack {
              * @param line The line number.
              * @param column The column number.
              */
-            explicit Token(const TokenType t, const std::size_t line, const std::size_t column)
+            explicit Token(const TokenType t, const int line, const int column)
                 : type(t), line(line), column(column) {}
 
             /**
@@ -159,13 +158,13 @@ namespace nand2tetris::jack {
              * @brief Gets the line number of the token.
              * @return The line number.
              */
-            std::size_t getLine() const { return line; }
+            int getLine() const { return line; }
 
             /**
              * @brief Gets the column number of the token.
              * @return The column number.
              */
-            std::size_t getColumn() const { return column; }
+            int getColumn() const { return column; }
 
             /**
              * @brief Returns a string representation of the token for debugging.
@@ -198,7 +197,7 @@ namespace nand2tetris::jack {
              * @param line The line number.
              * @param column The column number.
              */
-            TextToken(const TokenType t, const std::string_view text, const std::size_t line, const std::size_t column)
+            TextToken(const TokenType t, const std::string_view text, const int line, const int column)
                 : Token(t, line, column), text(text) {};
 
             /**
@@ -232,7 +231,7 @@ namespace nand2tetris::jack {
              * @param line The line number.
              * @param column The column number.
              */
-            explicit IntToken(const int val, const std::size_t line, const std::size_t column)
+            explicit IntToken(const int val, const int line, const int column)
                 : Token(TokenType::INT_CONST, line, column), intVal(val) {}
 
             /**
@@ -264,7 +263,7 @@ namespace nand2tetris::jack {
              * @param line The line number.
              * @param column The column number.
              */
-            explicit KeywordToken(const Keyword keyword, const std::size_t line, const std::size_t column)
+            explicit KeywordToken(const Keyword keyword, const int line, const int column)
                 : Token(TokenType::KEYWORD, line, column), keyword(keyword) {}
 
             /**
@@ -293,7 +292,7 @@ namespace nand2tetris::jack {
          * @param line The line number.
          * @param column The column number.
          */
-        EofToken(const std::size_t line, const std::size_t column)
+        EofToken(const int line, const int column)
             : Token(TokenType::END_OF_FILE, line, column) {}
 
         std::string toString() const override {

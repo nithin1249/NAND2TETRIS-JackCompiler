@@ -17,7 +17,6 @@ namespace nand2tetris::jack {
     struct MethodSignature {
         std::string_view returnType;        ///< The return type of the subroutine (e.g., "int", "void").
         std::vector<std::string_view> parameters; ///< List of parameter types.
-        bool isConstructor;                 ///< True if this is a constructor.
         bool isStatic;                      ///< True if this is a static function.
         int line;                           ///< Line number of the declaration.
         int column;                         ///< Column number of the declaration.
@@ -50,13 +49,12 @@ namespace nand2tetris::jack {
              * @param returnType The return type of the method.
              * @param params A vector of parameter types.
              * @param isStatic True if the method is static (function).
-             * @param isConstructor True if the method is a constructor.
              * @param line The line number of the declaration.
              * @param column The column number of the declaration.
              * @throws std::runtime_error If the method is already defined in the class.
              */
-            void registerMethod(std::string_view className,std::string_view methodName,std::string_view returnType,
-                const std::vector<std::string_view>& params, bool isStatic,bool isConstructor, int line,int column);
+            void registerMethod(std::string_view className, std::string_view methodName, std::string_view returnType,
+                                const std::vector<std::string_view> &params, bool isStatic, int line, int column);
 
             /**
              * @brief Checks if a class exists in the registry.
@@ -85,7 +83,9 @@ namespace nand2tetris::jack {
              * @return The MethodSignature struct containing details about the method.
              * @throws std::runtime_error If the method is not found.
              */
-            MethodSignature getSignature(std::string_view className,std::string_view methodName);
+            MethodSignature getSignature(std::string_view className,std::string_view methodName) const;
+
+            int getClassCount()const;
 
         private:
             // Map: ClassName -> (MethodName -> Signature)
