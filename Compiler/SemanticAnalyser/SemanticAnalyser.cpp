@@ -225,7 +225,11 @@ namespace nand2tetris::jack {
                 switch(n.value) {
                     case Keyword::TRUE_:
                     case Keyword::FALSE_: return "boolean";
-                    case Keyword::THIS_:  return currentClassName;
+                    case Keyword::THIS_:
+                        if (currentSubroutineKind == "function") {
+                            error("'this' cannot be used in a static function.", node);
+                        }
+                        return currentClassName;
                     case Keyword::NULL_:  return "null";
                     default: return "void";
                 }

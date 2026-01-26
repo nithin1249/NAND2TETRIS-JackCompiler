@@ -38,7 +38,7 @@ namespace nand2tetris::jack {
 
     bool GlobalRegistry::classExists(const std::string_view className) const {
         // Built-in primitive types are always considered "existing classes" for type checking purposes.
-        if (className=="int"||className=="boolean"||className=="char"||className=="void") {
+        if (className=="int"||className=="boolean"||className=="char") {
             return true;
         }
 
