@@ -255,4 +255,7 @@ namespace nand2tetris::jack {
         errorAt(line, column, message);
     }
 
+    std::string Tokenizer::getFilePath() {
+        return fileName;
+    }
 }

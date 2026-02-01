@@ -16,10 +16,50 @@ namespace nand2tetris::jack {
     }
 
     void SemanticAnalyser::checkTypeMatch(const std::string_view expected, const std::string_view actual, const Node &locationNode) const {
+        // 1. Exact Match
         if (expected == actual) return;
-        if (actual == "null") return; // Null is assignable to any object type.
-        if (expected == "char" && actual == "int") return; // Jack allows char/int interchangeability.
 
+        // 2. Handle 'null' (assignable to any object)
+        if (actual == "null") return;
+
+        // Helper booleans
+        // Note: void is not a primitive or an object variable type
+        const bool expectedIsPrimitive = (expected == "int" || expected == "char" || expected == "boolean");
+        const bool actualIsPrimitive   = (actual == "int" || actual == "char" || actual == "boolean");
+
+        const bool expectedIsObject = !expectedIsPrimitive && expected != "void";
+        const bool actualIsObject   = !actualIsPrimitive   && actual != "void";
+
+        // 3. Primitives are fluid (int <-> char <-> boolean)
+        // Jack allows mixing these freely (e.g. math with chars, bools as ints)
+        if (expectedIsPrimitive && actualIsPrimitive) {
+            return;
+        }
+
+        // 4. Int as Universal Pointer (The "Void*" of Jack)
+
+        // Case A: Object -> int
+        // (e.g. if (student == 0), or let address = student)
+        if (expected == "int" && actualIsObject) {
+            return;
+        }
+
+        // Case B: int -> Object (Your previous error)
+        // (e.g. let student = array[i]; // array access returns int)
+        if (expectedIsObject && actual == "int") {
+            return;
+        }
+
+        // 5. Array as Generic Object (The "Memory" fix)
+
+        // Case C: Object -> Array
+        // (e.g. do Memory.deAlloc(student); )
+        if (expected == "Array" && actualIsObject) {
+            return;
+        }
+
+        // If none of the above pass, it is a genuine error.
+        // e.g. Assigning 'Student' to 'School' (where neither is Array/int)
         error("Type Mismatch. Expected '" + std::string(expected) + "', Got '" + std::string(actual) + "'", locationNode);
     }
 

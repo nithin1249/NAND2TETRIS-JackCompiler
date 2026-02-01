@@ -74,6 +74,8 @@ namespace nand2tetris::jack {
              */
             [[noreturn]] void errorAt(size_t errLine, size_t errColumn, std::string_view message) const;
 
+            std::string getFilePath();
+
 
         private:
             std::string src;        ///< The source code content.

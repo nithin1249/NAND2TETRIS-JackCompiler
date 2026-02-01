@@ -6,6 +6,8 @@
 #include "AST.h"
 #include "../Tokenizer/Tokenizer.h"
 #include "../SemanticAnalyser/GlobalRegistry.h"
+#include <filesystem>
+namespace fs = std::filesystem;
 
 namespace nand2tetris::jack {
     Parser::Parser(Tokenizer &tokenizer, GlobalRegistry& registry):tokenizer(tokenizer),globalRegistry(registry) {
@@ -16,7 +18,16 @@ namespace nand2tetris::jack {
 
     std::unique_ptr<ClassNode> Parser::parse() {
         // The entry point for parsing a Jack file. Every Jack file must contain exactly one class.
-        return parseClass();
+        auto classNode = parseClass();
+
+        // Constraint: Single Class Check
+        // After parseClass() finishes, it consumes the final '}'.
+        // The currentToken should now be EOF. If it's anything else, it's an error.
+        if (currentToken->getType() != TokenType::END_OF_FILE) {
+            tokenizer.errorHere("Syntax Error: A Jack file must contain exactly one class. Found extra tokens after class body.");
+        }
+
+        return classNode;
     }
 
 
@@ -68,7 +79,20 @@ namespace nand2tetris::jack {
         std::string_view className = currentToken->getValue();
         consume(TokenType::IDENTIFIER, "Expected class name");
 
+        const fs::path filePath(tokenizer.getFilePath());
+        const std::string expectedName = filePath.stem().string();
+
+        if (className != expectedName) {
+            tokenizer.errorHere("Class name mismatch. The class defined in '" +
+                                filePath.filename().string() + "' must be named '" + expectedName +
+                                "', but found '" + std::string(className) + "'.");
+        }
+
         currentClassName=className;
+        if (globalRegistry.classExists(className)) {
+            tokenizer.errorHere("Duplicate class definition: Class '" + std::string(className) + "' is already "
+                                                                                                 "defined.");
+        }
         globalRegistry.registerClass(className);
 
         // 3. Expect opening brace '{'

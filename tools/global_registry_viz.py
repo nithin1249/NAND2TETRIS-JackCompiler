@@ -1,6 +1,7 @@
 import json
 import os
 import sys
+import atexit # <--- NEW: Required for cleanup on exit
 from textual.app import App, ComposeResult
 from textual.widgets import Header, Footer, DataTable, Input
 from textual.containers import Container
@@ -129,11 +130,24 @@ class RegistryDashboard(App):
     def action_focus_search(self):
         self.query_one(Input).focus()
 
+# --- CLEANUP LOGIC ---
+def cleanup_temp_file(path):
+    """Deletes the JSON file when the script exits."""
+    if os.path.exists(path):
+        try:
+            os.remove(path)
+        except OSError:
+            pass
+
 if __name__ == "__main__":
     if len(sys.argv) < 2:
         print("Usage: python3 global_registry_viz.py <path_to_json>")
         sys.exit(1)
 
     json_path = sys.argv[1]
+
+    # NEW: Register cleanup function to run when this script dies (even via 'X' button)
+    atexit.register(cleanup_temp_file, json_path)
+
     app = RegistryDashboard(json_path)
     app.run()
