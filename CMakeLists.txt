@@ -1,7 +1,10 @@
-cmake_minimum_required(VERSION 4.0)
+cmake_minimum_required(VERSION 4.1.2)
 project(NAND2TETRIS)
 
-set(CMAKE_CXX_STANDARD 26)
+set(CMAKE_CXX_STANDARD 23)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+set(CMAKE_CXX_EXTENSIONS OFF) # Ensure strictly standard C++)
+
 
 add_executable(NAND2TETRIS main.cpp
         Compiler/Tokenizer/Tokenizer.cpp
@@ -21,6 +24,11 @@ add_executable(NAND2TETRIS main.cpp
         Compiler/CodeGenerator/CodeGenerator.cpp
         Compiler/CodeGenerator/CodeGenerator.h
 )
+
+if(WIN32)
+    target_link_libraries(JackCompiler psapi)
+endif()
+
 
 add_executable(jack_tokens
         tests/JackTokensTest/jack_tokens.cpp

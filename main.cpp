@@ -6,10 +6,19 @@
 #include <mutex>
 #include <filesystem>
 #include <chrono>
-#include <sys/resource.h>
 #include <fstream>
 #include <thread>
 #include <functional>
+#include <cstdlib>
+
+#ifdef _WIN32
+	#include <windows.h>
+	#include <psapi.h>
+	#include <process.h>
+#else
+	#include <sys/resource.h>
+	#include <unistd.h>
+#endif
 
 #include "Compiler/Tokenizer/Tokenizer.h"
 #include "Compiler/Parser/Parser.h"
@@ -24,23 +33,35 @@ namespace fs = std::filesystem;
 // Global mutex for thread-safe console logging
 std::mutex consoleMutex;
 
+// Thread-safe logging function
 void log(const std::string& msg) {
 	std::scoped_lock lock(consoleMutex);
 	std::cout << msg << std::endl;
 }
 
 // Memory usage helper (Peak RSS in MB)
+// Returns the peak resident set size (memory usage) of the process.
 double getPeakMemoryMB() {
+#ifdef _WIN32
+	PROCESS_MEMORY_COUNTERS pmc;
+	if (GetProcessMemoryInfo(GetCurrentProcess(), &pmc, sizeof(pmc))) {
+		// PeakWorkingSetSize is in bytes, convert to MB
+		return static_cast<double>(pmc.PeakWorkingSetSize) / (1024.0 * 1024.0);
+	}
+	return 0.0;
+#else
 	struct rusage rusage;
 	getrusage(RUSAGE_SELF, &rusage);
-#ifdef __APPLE__
-	return static_cast<double>(rusage.ru_maxrss) / (1024.0 * 1024.0);
-#else
-	return static_cast<double>(rusage.ru_maxrss) / 1024.0;
+	#ifdef __APPLE__
+		return static_cast<double>(rusage.ru_maxrss) / (1024.0 * 1024.0);
+	#else
+		return static_cast<double>(rusage.ru_maxrss) / 1024.0; // Linux uses KB
+	#endif
 #endif
 }
 
-//This struct holds the entire lifecycle state of a single .jack file.
+// This struct holds the entire lifecycle state of a single .jack file.
+// It keeps the Tokenizer (source string owner), AST, and SymbolTable alive.
 struct CompilationUnit {
 	std::string filePath;
 	std::unique_ptr<Tokenizer> tokenizer;
@@ -48,15 +69,20 @@ struct CompilationUnit {
 	std::shared_ptr<SymbolTable> symbolTable;
 };
 
+// Job 1: Parse
+// Reads the file, tokenizes it, and builds the AST.
+// Also registers the class and its methods into the GlobalRegistry.
 CompilationUnit parseJob(const std::string& filePath, GlobalRegistry* registry) {
 	auto tokenizer = std::make_unique<Tokenizer>(filePath);
-	auto symbolTable = std::make_shared<SymbolTable>();
+	const auto symbolTable = std::make_shared<SymbolTable>();
 	Parser parser(*tokenizer, *registry);
 	auto ast = parser.parse();
 	log("[Parsed]    " + filePath);
 	return {filePath, std::move(tokenizer), std::move(ast),symbolTable};
 };
 
+// Job 2: Analyze
+// Performs semantic analysis (type checking, scope resolution) on the AST.
 void analyzeJob(const CompilationUnit& unit, const GlobalRegistry* registry) {
 	if (!unit.ast) return; // Skip if parse failed
 	SemanticAnalyser analyser(*registry);
@@ -64,6 +90,8 @@ void analyzeJob(const CompilationUnit& unit, const GlobalRegistry* registry) {
 	log("[Verified]  " + unit.filePath);
 }
 
+// Job 3: Compile
+// Generates VM code from the AST and writes it to a .vm file.
 void compileJob(const CompilationUnit& unit, const GlobalRegistry* registry) {
 	if (!unit.ast) return;
 
@@ -81,6 +109,8 @@ void compileJob(const CompilationUnit& unit, const GlobalRegistry* registry) {
 	log("[Generated] " + outputPath.string());
 }
 
+// Validates that the Main class has a static void main() function.
+// This is the entry point of a Jack program.
 void validateMainEntry(const GlobalRegistry& registry) {
 	try {
 		// 1. Fetch the signature from the registry
@@ -102,25 +132,41 @@ void validateMainEntry(const GlobalRegistry& registry) {
 	}
 }
 
+// Helper to find the 'tools' directory for visualization scripts.
 std::string getToolsDir() {
-	// Check Install Directory (~/.jack_toolchain/tools)
-	if (const char* home = std::getenv("HOME")) {
-		const fs::path installedTools = fs::path(home) / ".jack_toolchain" / "tools";
-		if (fs::exists(installedTools)) {
-			return installedTools.string();
-		}
+	fs::path homeDir;
+
+	// Check Env Vars
+#ifdef _WIN32
+	const char* userProfile = std::getenv("USERPROFILE");
+	if (userProfile) homeDir = userProfile;
+#else
+	const char* home = std::getenv("HOME");
+	if (home) homeDir = home;
+#endif
+
+	// Check Installed Location (~/.jack_toolchain/tools)
+	if (!homeDir.empty()) {
+		const fs::path installedTools = homeDir / ".jack_toolchain" / "tools";
+		if (fs::exists(installedTools)) return installedTools.string();
 	}
 
 	return "";
 }
 
-void runUnifiedViz(const GlobalRegistry& registry, const std::vector<CompilationUnit>& units) {
-	std::cout << "\n📊 Launching Unified Compiler Dashboard..." << std::endl;
+// Helper to get a temporary file path.
+fs::path getTempPath(const std::string& filename) {
+	try {
+		return fs::temp_directory_path() / filename;
+	} catch (...) {
+		return fs::path(filename); // Fallback to local dir
+	}
+}
 
+// Launches the unified visualization dashboard (Registry + Symbol Tables).
+void runUnifiedViz(const GlobalRegistry& registry, const std::vector<CompilationUnit>& units) {
 	// 1. Dump Registry to Temp
-	// We use a fixed filename so the python script always knows where to look if hardcoded,
-	// but here we pass it as an argument for flexibility.
-	std::string regPath = "/tmp/jack_unified_reg.json";
+	std::string regPath = getTempPath("jack_unified_reg.json");
 	registry.dumpToJSON(regPath);
 
 	// 2. Dump Symbol Tables for all files
@@ -128,7 +174,7 @@ void runUnifiedViz(const GlobalRegistry& registry, const std::vector<Compilation
 	for (const auto& unit : units) {
 		if (!unit.symbolTable) continue;
 
-		// Create a unique filename for each symbol table: "jack_sym_Main_12345.json"
+		// Create a unique filename for each symbol table
 		size_t h = std::hash<std::string>{}(unit.filePath);
 		std::string name = fs::path(unit.filePath).stem().string();
 		std::string path = "/tmp/jack_sym_" + name + "_" + std::to_string(h) + ".json";
@@ -147,14 +193,17 @@ void runUnifiedViz(const GlobalRegistry& registry, const std::vector<Compilation
 	fs::path script = fs::path(toolsDir) / "unified_viz.py";
 	std::string absScriptPath = fs::absolute(script).string();
 
-	// 4. Construct Command: python3 unified_viz.py --registry "..." --symbols "..." "..."
-	std::string cmd = "python3 \"" + absScriptPath + "\" --registry \"" + regPath + "\"";
+	// 4. Construct Command
+	std::string cmd;
+	#ifdef _WIN32
+		cmd = "python \"" + absScriptPath + "\" --registry \"" + regPath + "\"";
+	#else
+		cmd = "python3 \"" + absScriptPath + "\" --registry \"" + regPath + "\"";
+	#endif
 
 	if (!symPaths.empty()) {
 		cmd += " --symbols";
-		for (const auto& p : symPaths) {
-			cmd += " \"" + p + "\"";
-		}
+		for (const auto& p : symPaths) cmd += " \"" + p + "\"";
 	}
 
 	// 5. Run (Blocks until you close the dashboard)
@@ -162,11 +211,10 @@ void runUnifiedViz(const GlobalRegistry& registry, const std::vector<Compilation
 
 	// 6. Cleanup Temp Files
 	if (fs::exists(regPath)) fs::remove(regPath);
-	for (const auto& p : symPaths) {
-		if (fs::exists(p)) fs::remove(p);
-	}
+	for (const auto& p : symPaths) if (fs::exists(p)) fs::remove(p);
 }
 
+// Launches the AST visualization tool for all compiled units.
 void runBatchAstViz(const std::vector<CompilationUnit>& units) {
 	std::string toolsDir = getToolsDir();
 	if (toolsDir.empty()) {
@@ -179,41 +227,44 @@ void runBatchAstViz(const std::vector<CompilationUnit>& units) {
 
 	std::vector<std::string> tempFiles;
 	std::string pyArgs = "";
-	std::string cleanupCmd = "rm -f";
 
 	// 1. Generate ALL XML files
 	for (const auto& unit : units) {
 		if (!unit.ast) continue;
 
-		// Create unique filename: "Main_hash.xml"
+		// Create unique filename
 		size_t pathHash = std::hash<std::string>{}(unit.filePath);
 		std::string niceName = fs::path(unit.filePath).stem().string();
 		std::string xmlFilename = niceName + "_" + std::to_string(pathHash) + ".xml";
 
-		std::string xmlPath = "/tmp/" + xmlFilename;
+		fs::path xmlPath = getTempPath(xmlFilename);
+
+		std::cout << "Generated: " << xmlPath.string() << std::endl;
 
 		std::ofstream xmlFile(xmlPath);
 		unit.ast->printXml(xmlFile, 0);
 		xmlFile.close();
 
-		tempFiles.push_back(xmlPath);
+		tempFiles.push_back(xmlPath.string());
 
-		pyArgs += " \"" + xmlPath + "\"";
-		cleanupCmd += " \"" + xmlPath + "\"";
+		pyArgs += " \"" + xmlPath.string() + "\"";
 	}
-
 	if (tempFiles.empty()) return;
 
 	// 2. Build the command
-	// Format: (python3 viz.py file1 file2 && rm file1 file2) &
-	std::string cmd = "(python3 \"" + absScriptPath + "\"" + pyArgs + " && " + cleanupCmd + ") &";
+	std::string cmd;
+	#ifdef _WIN32
+		// Windows: start /b (background)
+		cmd = "start /b python \"" + absScriptPath + "\"" + pyArgs;
+	#else
+		// Linux/Mac: python3, rm, &
+		std::string cleanupCmd = "rm -f";
+		for (const auto& f : tempFiles) cleanupCmd += " \"" + f + "\"";
+		cmd = "(python3 \"" + absScriptPath + "\"" + pyArgs + " && " + cleanupCmd + ") &";
+	#endif
 
-	// 3. Run
 	std::system(cmd.c_str());
 }
-
-
-
 
 int main(int argc, char* argv[]) {
 	// Optimization: Disable C-style I/O synchronization for speed
@@ -264,6 +315,7 @@ int main(int argc, char* argv[]) {
 			return 1;
 		}
 
+		// Check for Main.jack
 		bool hasMain = false;
 		for (const auto& file : userFiles) {
 			if (fs::path(file).filename() == "Main.jack") {
@@ -282,6 +334,7 @@ int main(int argc, char* argv[]) {
 
 		GlobalRegistry registry;
 
+		// --- PHASE 1: PARSING ---
 		const auto startParse = std::chrono::high_resolution_clock::now();
 		std::vector<std::future<CompilationUnit>> parseTasks;
 
@@ -297,10 +350,11 @@ int main(int argc, char* argv[]) {
 		}
 		const auto endParse = std::chrono::high_resolution_clock::now();
 
+		// Validate Entry Point
 		validateMainEntry(registry);
 
 
-
+		// --- PHASE 2: SEMANTIC ANALYSIS ---
 		const auto startAnalyze = std::chrono::high_resolution_clock::now();
 		std::vector<std::future<void>> analysisTasks;
 
@@ -314,6 +368,7 @@ int main(int argc, char* argv[]) {
 		}
 		const auto endAnalyze = std::chrono::high_resolution_clock::now();
 
+		// --- PHASE 3: CODE GENERATION ---
 		const auto startCodeGen = std::chrono::high_resolution_clock::now();
 		std::vector<std::future<void>> compileTasks;
 
@@ -340,6 +395,7 @@ int main(int argc, char* argv[]) {
 		std::cout << " Peak Memory:    " << getPeakMemoryMB() << " MB" << std::endl;
 		std::cout << "========================================" << std::endl;
 
+		// --- VISUALIZATION ---
 		if (vizAst) {
 			runBatchAstViz(units);
 			std::this_thread::sleep_for(std::chrono::seconds(1));

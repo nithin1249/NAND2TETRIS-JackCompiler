@@ -17,6 +17,7 @@
 #include "../../Compiler/Parser/Parser.h"
 #include "../../Compiler/Parser/AST.h"
 #include "../../Compiler/SemanticAnalyser/GlobalRegistry.h"
+#include "../../Compiler/SemanticAnalyser/SymbolTable.h"
 #include "../../Compiler/SemanticAnalyser/SemanticAnalyser.h"
 #include "../../Compiler/CodeGenerator//CodeGenerator.h"
 
@@ -46,26 +47,28 @@ struct CompilationUnit {
     std::unique_ptr<Tokenizer> tokenizer;
     std::unique_ptr<ClassNode> ast;
     std::string filePath;
+    std::shared_ptr<SymbolTable> symbolTable;
 };
 
 // --- JOB 1: PARSE (Produces AST & Updates Registry) ---
 CompilationUnit parseJob(const std::string& filePath, GlobalRegistry* registry) {
     auto tokenizer = std::make_unique<Tokenizer>(filePath);
+    const auto symbolTable = std::make_shared<SymbolTable>();
     Parser parser(*tokenizer, *registry);
     auto ast = parser.parse();
     log("[Parsed] " + filePath);
-    return {std::move(tokenizer), std::move(ast), filePath};
+    return {std::move(tokenizer), std::move(ast), filePath,symbolTable};
 }
 
 // --- JOB 2: ANALYZE (Read-Only Checks) ---
-void analyzeJob(const ClassNode* ast, const GlobalRegistry* registry) {
+void analyzeJob(const CompilationUnit& unit, const GlobalRegistry* registry) {
     SemanticAnalyser analyser(*registry);
-    analyser.analyseClass(*ast);
-    log("[Verified] class " + std::string(ast->getClassName()));
+    analyser.analyseClass(*unit.ast,*unit.symbolTable);
+    log("[Verified] class " + std::string(unit.ast->getClassName()));
 }
 
 // --- JOB 3: CODE GEN (Writes .vm files) ---
-void compileJob(const ClassNode* ast, const std::string& inputPath, const GlobalRegistry* registry) {
+void compileJob(const CompilationUnit& unit, const std::string& inputPath, const GlobalRegistry* registry) {
     // 1. Determine Output Path: "Folder/MyClass.jack" -> "Folder/MyClass.vm"
     fs::path p(inputPath);
     fs::path outputPath = p.replace_extension(".vm");
@@ -77,8 +80,8 @@ void compileJob(const ClassNode* ast, const std::string& inputPath, const Global
     }
 
     // 3. Generate VM Code
-    CodeGenerator generator(*registry, out);
-    generator.compileClass(*ast);
+    CodeGenerator generator(*registry, out,*unit.symbolTable);
+    generator.compileClass(*unit.ast);
 
     log("[Generated] " + outputPath.string());
 }
@@ -126,7 +129,7 @@ int main(int argc, char* argv[]) {
 
         analysisTasks.reserve(units.size());
         for (const auto& unit : units) {
-            analysisTasks.push_back(std::async(std::launch::async, analyzeJob, unit.ast.get(), &registry));
+            analysisTasks.push_back(std::async(std::launch::async, analyzeJob,std::ref(unit), &registry));
         }
 
         for (auto& t : analysisTasks) t.get();
@@ -138,7 +141,7 @@ int main(int argc, char* argv[]) {
 
         compileTasks.reserve(units.size());
         for (const auto& unit : units) {
-            compileTasks.push_back(std::async(std::launch::async, compileJob, unit.ast.get(), unit.filePath, &registry));
+            compileTasks.push_back(std::async(std::launch::async, compileJob,std::ref(unit), unit.filePath, &registry));
         }
 
         for (auto& t : compileTasks) t.get();

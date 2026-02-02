@@ -55,8 +55,9 @@ CompilationUnit parseJob(const std::string& filePath, GlobalRegistry* registry) 
 }
 
 void analyzeJob(const ClassNode* ast, const GlobalRegistry* registry) {
+    SymbolTable table;
     SemanticAnalyser analyser(*registry);
-    analyser.analyseClass(*ast);
+    analyser.analyseClass(*ast,table);
     log("[Verified] class " + std::string(ast->getClassName()));
 }
 
