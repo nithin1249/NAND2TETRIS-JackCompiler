@@ -45,20 +45,22 @@ struct CompilationUnit {
 	std::string filePath;
 	std::unique_ptr<Tokenizer> tokenizer;
 	std::unique_ptr<ClassNode> ast;
+	std::shared_ptr<SymbolTable> symbolTable;
 };
 
 CompilationUnit parseJob(const std::string& filePath, GlobalRegistry* registry) {
 	auto tokenizer = std::make_unique<Tokenizer>(filePath);
+	auto symbolTable = std::make_shared<SymbolTable>();
 	Parser parser(*tokenizer, *registry);
 	auto ast = parser.parse();
 	log("[Parsed]    " + filePath);
-	return {filePath, std::move(tokenizer), std::move(ast)};
+	return {filePath, std::move(tokenizer), std::move(ast),symbolTable};
 };
 
 void analyzeJob(const CompilationUnit& unit, const GlobalRegistry* registry) {
 	if (!unit.ast) return; // Skip if parse failed
 	SemanticAnalyser analyser(*registry);
-	analyser.analyseClass(*unit.ast);
+	analyser.analyseClass(*unit.ast,*unit.symbolTable);
 	log("[Verified]  " + unit.filePath);
 }
 
@@ -73,7 +75,7 @@ void compileJob(const CompilationUnit& unit, const GlobalRegistry* registry) {
 		throw std::runtime_error("Could not open output file: " + outputPath.string());
 	}
 
-	CodeGenerator generator(*registry, out);
+	CodeGenerator generator(*registry, out,*unit.symbolTable);
 	generator.compileClass(*unit.ast);
 
 	log("[Generated] " + outputPath.string());
@@ -112,31 +114,56 @@ std::string getToolsDir() {
 	return "";
 }
 
-void runRegistryViz(const GlobalRegistry& registry) {
-	// 1. Save to /tmp
-	const std::string jsonPath = "/tmp/jack_registry_dump.json";
-	registry.dumpToJSON(jsonPath);
+void runUnifiedViz(const GlobalRegistry& registry, const std::vector<CompilationUnit>& units) {
+	std::cout << "\n📊 Launching Unified Compiler Dashboard..." << std::endl;
 
-	// 2. Locate the tool
-	const std::string toolsDir = getToolsDir();
+	// 1. Dump Registry to Temp
+	// We use a fixed filename so the python script always knows where to look if hardcoded,
+	// but here we pass it as an argument for flexibility.
+	std::string regPath = "/tmp/jack_unified_reg.json";
+	registry.dumpToJSON(regPath);
+
+	// 2. Dump Symbol Tables for all files
+	std::vector<std::string> symPaths;
+	for (const auto& unit : units) {
+		if (!unit.symbolTable) continue;
+
+		// Create a unique filename for each symbol table: "jack_sym_Main_12345.json"
+		size_t h = std::hash<std::string>{}(unit.filePath);
+		std::string name = fs::path(unit.filePath).stem().string();
+		std::string path = "/tmp/jack_sym_" + name + "_" + std::to_string(h) + ".json";
+
+		unit.symbolTable->dumpToJSON(name, path);
+		symPaths.push_back(path);
+	}
+
+	// 3. Locate the Python Script
+	std::string toolsDir = getToolsDir();
 	if (toolsDir.empty()) {
-		std::cerr << "Error: 'tools' folder not found." << std::endl;
-		// Cleanup if we can't run the tool
-		if (fs::exists(jsonPath)) fs::remove(jsonPath);
+		std::cerr << "Error: 'tools' folder not found. Cannot launch visualization." << std::endl;
 		return;
 	}
 
-	const fs::path scriptPath = fs::path(toolsDir) / "global_registry_viz.py";
-	const std::string absScriptPath = fs::absolute(scriptPath).string();
+	fs::path script = fs::path(toolsDir) / "unified_viz.py";
+	std::string absScriptPath = fs::absolute(script).string();
 
-	// 3. Run in the SAME terminal
-	// We simply call python3. std::system blocks until you exit the python app.
-	const std::string cmd = "python3 \"" + absScriptPath + "\" \"" + jsonPath + "\"";
+	// 4. Construct Command: python3 unified_viz.py --registry "..." --symbols "..." "..."
+	std::string cmd = "python3 \"" + absScriptPath + "\" --registry \"" + regPath + "\"";
+
+	if (!symPaths.empty()) {
+		cmd += " --symbols";
+		for (const auto& p : symPaths) {
+			cmd += " \"" + p + "\"";
+		}
+	}
+
+	// 5. Run (Blocks until you close the dashboard)
 	std::system(cmd.c_str());
 
-	// 4. Cleanup (Runs immediately after you close the Python tool)
-	if (fs::exists(jsonPath)) {
-		fs::remove(jsonPath);
+	// 6. Cleanup Temp Files
+	if (fs::exists(regPath)) fs::remove(regPath);
+	for (const auto& p : symPaths) {
+		if (fs::exists(p)) fs::remove(p);
 	}
 }
 
@@ -202,18 +229,17 @@ int main(int argc, char* argv[]) {
 
 		std::vector<std::string> userFiles;
 
-		bool vizRegistry = false;
 		bool vizAst = false;
+		bool vizSymbols = false;
 		// Iterate through ALL command line arguments
 		for (int i = 1; i < argc; ++i) {
 			std::string arg = argv[i];
-
-			if (arg == "--viz-registry") {
-				vizRegistry = true;
-				continue;
-			}
 			if (arg == "--viz-ast") {
 				vizAst = true;
+				continue;
+			}
+			if (arg == "--viz-checker") {
+				vizSymbols = true;
 				continue;
 			}
 
@@ -320,8 +346,8 @@ int main(int argc, char* argv[]) {
 		}
 
 
-		if (vizRegistry) {
-			runRegistryViz(registry);
+		if (vizSymbols) {
+			runUnifiedViz(registry, units);
 		}
 
 	}catch (const std::exception& e) {

@@ -24,8 +24,9 @@ namespace nand2tetris::jack {
              *
              * @param registry The global registry containing class and method signatures.
              * @param out The output stream to write VM code to.
+             * @param table Symbol table for code generation
              */
-            CodeGenerator(const GlobalRegistry& registry, std::ostream& out);
+            CodeGenerator(const GlobalRegistry& registry, std::ostream& out,SymbolTable& table);
 
             /**
              * @brief Compiles a class node into VM code.
@@ -36,7 +37,7 @@ namespace nand2tetris::jack {
         private:
             const GlobalRegistry& registry; ///< Reference to the global registry.
             VMWriter writer;                ///< Helper to write VM commands.
-            SymbolTable symbolTable;        ///< Symbol table for variable resolution.
+            SymbolTable& symbolTable;        ///< Symbol table for variable resolution.
             std::string_view currentClassName; ///< Name of the class currently being compiled.
             int labelCounter = 0;           ///< Counter for generating unique labels.
 
@@ -52,9 +53,9 @@ namespace nand2tetris::jack {
              * Sets up the symbol table, writes the function declaration, handles constructor/method setup,
              * and compiles the body statements.
              *
-             * @param sub The subroutine declaration node.
+             * @param node The subroutine declaration node.
              */
-            void compileSubroutine(const SubroutineDecNode& sub);
+            void compileSubroutine(const SubroutineDecNode& node);
 
             /**
              * @brief Compiles a list of statements.

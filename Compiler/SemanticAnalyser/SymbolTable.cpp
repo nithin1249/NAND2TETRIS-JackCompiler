@@ -3,6 +3,9 @@
 //
 
 #include "SymbolTable.h"
+#include <stdexcept>
+#include <string>
+#include <fstream>
 
 namespace nand2tetris::jack {
 
@@ -25,14 +28,48 @@ namespace nand2tetris::jack {
         indices[SymbolKind::LCL] = 0;
     }
 
-    void SymbolTable::startSubroutine() {
-        // When starting a new subroutine, we clear the subroutine-level scope.
-        // Class-level scope (STATIC, FIELD) remains untouched.
+    void SymbolTable::startSubroutine(const std::string_view name) {
+        // If there was a previous subroutine, save its state to history.
+        if (!currentSubroutineName.empty()) {
+            SubroutineSnapshot snap;
+            snap.name = currentSubroutineName;
+            snap.symbols = subRoutineScope;
+            snap.indices = indices;
+            history.push_back(snap);
+        }
+
+        // Clear the subroutine-level scope for the new subroutine.
         subRoutineScope.clear();
 
         // Reset indices for subroutine-level variables.
         indices[SymbolKind::ARG] = 0;
         indices[SymbolKind::LCL] = 0;
+
+        currentSubroutineName = name;
+    }
+
+    void SymbolTable::startSubroutineFromHistory(const std::string_view name) {
+        subRoutineScope.clear();
+        bool found = false;
+
+        // Find the snapshot by name in the history.
+        for (const auto& snap : history) {
+            if (snap.name == name) {
+                // Restore the symbol table and indices from the snapshot.
+                subRoutineScope = snap.symbols;
+                indices = snap.indices;
+                currentSubroutineName = name;
+                found = true;
+                break;
+            }
+        }
+
+        // If not found (shouldn't happen in valid flow), reset as a new subroutine.
+        if (!found) {
+            indices[SymbolKind::ARG] = 0;
+            indices[SymbolKind::LCL] = 0;
+            currentSubroutineName = name;
+        }
     }
 
     const Symbol *SymbolTable::lookup(const std::string_view name) const {
@@ -139,5 +176,51 @@ namespace nand2tetris::jack {
         } else {
             subRoutineScope[name] = symbol;
         }
+    }
+
+    void SymbolTable::dumpToJSON(std::string_view className, const std::string& path) const {
+        // Create a temporary full history that includes the current active subroutine
+        std::vector<SubroutineSnapshot> fullHistory = history;
+        if (!currentSubroutineName.empty()) {
+            SubroutineSnapshot snap;
+            snap.name = currentSubroutineName;
+            snap.symbols = subRoutineScope;
+            fullHistory.push_back(snap);
+        }
+
+        std::ofstream json(path);
+        if (!json.is_open()) return;
+
+        json << "{\n  \"className\": \"" << className << "\",\n";
+        json << "  \"classSymbols\": [\n";
+
+        bool first = true;
+        for (const auto& pair : classScope) {
+            if (!first) json << ",\n";
+            json << "    {\"name\": \"" << pair.first << "\", \"type\": \"" << pair.second.type
+                 << "\", \"kind\": \"" << kindToString(pair.second.kind)
+                 << "\", \"index\": " << pair.second.index << "}";
+            first = false;
+        }
+        json << "\n  ],\n";
+
+        json << "  \"subroutines\": [\n";
+        bool firstSub = true;
+        for (const auto& snap : fullHistory) {
+            if (!firstSub) json << ",\n";
+            json << "    {\n      \"name\": \"" << snap.name << "\",\n      \"symbols\": [\n";
+            bool firstSym = true;
+            for (const auto& pair : snap.symbols) {
+                if (!firstSym) json << ",\n";
+                json << "        {\"name\": \"" << pair.first << "\", \"type\": \"" << pair.second.type
+                     << "\", \"kind\": \"" << kindToString(pair.second.kind)
+                     << "\", \"index\": " << pair.second.index << "}";
+                firstSym = false;
+            }
+            json << "\n      ]\n    }";
+            firstSub = false;
+        }
+        json << "\n  ]\n}\n";
+        json.close();
     }
 }

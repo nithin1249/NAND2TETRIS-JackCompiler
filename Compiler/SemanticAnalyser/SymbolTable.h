@@ -32,6 +32,17 @@ namespace nand2tetris::jack{
     };
 
     /**
+     * @brief Structure representing a snapshot of a subroutine's symbol table state.
+     *
+     * Used for restoring the symbol table state during code generation or debugging.
+     */
+    struct SubroutineSnapshot {
+        std::string_view name; ///< The name of the subroutine.
+        std::unordered_map<std::string_view, Symbol> symbols; ///< The symbols defined in this subroutine.
+        std::unordered_map<SymbolKind, int> indices; ///< The running indices at the end of this subroutine.
+    };
+
+    /**
      * @brief A symbol table for the Jack compiler.
      *
      * Manages the scope and properties of variables (identifiers) during compilation.
@@ -54,8 +65,19 @@ namespace nand2tetris::jack{
              *
              * Clears the subroutine-level symbol table and resets the indices for ARG and LCL.
              * Should be called when starting to compile a new subroutine.
+             *
+             * @param name The name of the subroutine being started.
              */
-            void startSubroutine();
+            void startSubroutine(std::string_view name);
+
+            /**
+             * @brief Restores a subroutine scope from history.
+             *
+             * Used during code generation to restore the symbol table state of a previously analyzed subroutine.
+             *
+             * @param name The name of the subroutine to restore.
+             */
+            void startSubroutineFromHistory(std::string_view name);
 
             /**
              * @brief Returns the number of variables of the given kind defined in the current scope.
@@ -106,6 +128,16 @@ namespace nand2tetris::jack{
              */
             void define(std::string_view name, std::string_view type, SymbolKind kind,int line, int col);
 
+            /**
+             * @brief Dumps the symbol table content to a JSON file.
+             *
+             * Useful for debugging and visualization.
+             *
+             * @param className The name of the class being dumped.
+             * @param path The file path to write the JSON to.
+             */
+            void dumpToJSON(std::string_view className, const std::string& path) const;
+
         private:
             /**
              * @brief Helper to look up a symbol by name.
@@ -120,6 +152,9 @@ namespace nand2tetris::jack{
             std::unordered_map<std::string_view,Symbol> classScope;      ///< Stores class-level symbols (STATIC, FIELD).
             std::unordered_map<std::string_view,Symbol> subRoutineScope; ///< Stores subroutine-level symbols (ARG, LCL).
             std::unordered_map<SymbolKind, int> indices;                 ///< Tracks the next available index for each SymbolKind.
+
+            std::vector<SubroutineSnapshot> history; ///< Stores snapshots of previous subroutines.
+            std::string_view currentSubroutineName;  ///< Name of the currently active subroutine.
 
     };
 };

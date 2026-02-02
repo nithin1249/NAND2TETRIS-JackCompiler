@@ -63,10 +63,9 @@ namespace nand2tetris::jack {
         error("Type Mismatch. Expected '" + std::string(expected) + "', Got '" + std::string(actual) + "'", locationNode);
     }
 
-    void SemanticAnalyser::analyseClass(const ClassNode& class_node) {
+    void SemanticAnalyser::analyseClass(const ClassNode& class_node,SymbolTable& table) {
         currentClassName=class_node.className;
 
-        SymbolTable masterTable;
 
         // 1. Process Class Variables (Static/Field)
         for (const std::unique_ptr<ClassVarDecNode>& var:class_node.classVars) {
@@ -79,20 +78,18 @@ namespace nand2tetris::jack {
 
             // Add variables to the class-level symbol table
             for (const std::string_view& name : var->varNames) {
-                masterTable.define(name, var->type, kind,var->getLine(),var->getCol());
+                table.define(name, var->type, kind,var->getLine(),var->getCol());
             }
         }
 
         // 2. Process Subroutines
         for (const std::unique_ptr<SubroutineDecNode>& sub : class_node.subroutineDecs) {
-            analyseSubroutine(*sub, masterTable);
+            analyseSubroutine(*sub, table);
         }
     }
 
-    void SemanticAnalyser::analyseSubroutine(const SubroutineDecNode &sub, const SymbolTable &masterTable) {
+    void SemanticAnalyser::analyseSubroutine(const SubroutineDecNode &sub, SymbolTable &table) {
         currentSubroutineName=sub.name;
-
-
         // Determine kind string for logic checks
         if (sub.subType == SubroutineType::CONSTRUCTOR) currentSubroutineKind = "constructor";
         else if (sub.subType == SubroutineType::FUNCTION) currentSubroutineKind = "function";
@@ -107,15 +104,13 @@ namespace nand2tetris::jack {
             }
         }
 
-        // 1. Create Local Scope (Copy Master)
-        // We start with a copy of the class-level table to inherit static/field vars.
-        SymbolTable localTable = masterTable;
-        localTable.startSubroutine();
+
+        table.startSubroutine(sub.name);
 
         // 2. Define 'this' for methods
         //  operate on the current instance, so 'this' is the first implicit argument.
         if (sub.subType == SubroutineType::METHOD) {
-            localTable.define("this", currentClassName, SymbolKind::ARG, sub.getLine(), 0);
+            table.define("this", currentClassName, SymbolKind::ARG, sub.getLine(), 0);
         }
 
         // 3. Define Arguments
@@ -123,7 +118,7 @@ namespace nand2tetris::jack {
             if (!registry.classExists(type)) {
                 error("Unknown type '" + std::string(type) + "' for argument '" + std::string(name) + "'", sub);
             }
-            localTable.define(name, type, SymbolKind::ARG, sub.getLine(), 0);
+            table.define(name, type, SymbolKind::ARG, sub.getLine(), 0);
         }
 
         // 4. Define Local Variables
@@ -132,12 +127,12 @@ namespace nand2tetris::jack {
                 error("Unknown type '" + std::string(varDecl->type) + "'", *varDecl);
             }
             for (const std::string_view& name : varDecl->varNames) {
-                localTable.define(name, varDecl->type, SymbolKind::LCL, varDecl->getLine(), varDecl->getCol());
+                table.define(name, varDecl->type, SymbolKind::LCL, varDecl->getLine(), varDecl->getCol());
             }
         }
 
         // 5. Analyze Statements
-        analyseStatements(sub.statements, localTable);
+        analyseStatements(sub.statements, table);
     }
 
 

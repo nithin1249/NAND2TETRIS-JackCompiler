@@ -5,7 +5,8 @@
 #include "CodeGenerator.h"
 
 namespace nand2tetris::jack {
-    CodeGenerator::CodeGenerator(const GlobalRegistry &registry, std::ostream &out):registry(registry),writer(out){}
+    CodeGenerator::CodeGenerator(const GlobalRegistry &registry, std::ostream &out,SymbolTable& table):registry
+    (registry),writer(out),symbolTable(table){}
 
     std::string CodeGenerator::getUniqueLabel() {
         return "L" + std::to_string(labelCounter++);
@@ -13,41 +14,15 @@ namespace nand2tetris::jack {
 
     void CodeGenerator::compileClass(const ClassNode &node) {
         currentClassName=node.getClassName();
-        symbolTable = SymbolTable(); // Reset symbol table for the new class
 
-        // 1. Define Class Variables (Static/Field) in the symbol table
-        for (const auto& var : node.classVars) {
-            const SymbolKind kind = (var->kind == ClassVarKind::STATIC) ? SymbolKind::STATIC : SymbolKind::FIELD;
-            for (const auto& name : var->varNames) {
-                symbolTable.define(name, var->type, kind, var->getLine(), var->getCol());
-            }
-        }
-
-        // 2. Compile Subroutines
+        // Compile Subroutines
         for (const auto& sub : node.subroutineDecs) {
             compileSubroutine(*sub);
         }
     }
 
     void CodeGenerator::compileSubroutine(const SubroutineDecNode& node) {
-        symbolTable.startSubroutine(); // Clear local scope
-
-        // Define 'this' for methods (argument 0)
-        if (node.subType == SubroutineType::METHOD) {
-            symbolTable.define("this", currentClassName, SymbolKind::ARG, node.getLine(), node.getCol());
-        }
-
-        // Define Arguments
-        for (const auto& param : node.parameters) {
-            symbolTable.define(param.name, param.type, SymbolKind::ARG, node.getLine(), node.getCol());
-        }
-
-        // Define Local Variables
-        for (const auto& var : node.localVars) {
-            for (const auto& name : var->varNames) {
-                symbolTable.define(name, var->type, SymbolKind::LCL, var->getLine(), var->getCol());
-            }
-        }
+        symbolTable.startSubroutineFromHistory(node.name);
 
         // Write Function Declaration
         const std::string funcName=std::string(currentClassName) + "." + std::string(node.name);

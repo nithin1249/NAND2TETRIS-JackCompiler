@@ -32,9 +32,10 @@ namespace nand2tetris::jack{
              * @brief Analyzes a class node and its contents.
              *
              * @param class_node The root node of the class AST.
+             * @param table The symbol table to use for analysis.
              * @throws std::runtime_error if any semantic error is found.
              */
-            void analyseClass(const ClassNode& class_node);
+            void analyseClass(const ClassNode& class_node,SymbolTable& table);
         private:
             const GlobalRegistry& registry; ///< Reference to the global registry.
 
@@ -69,9 +70,9 @@ namespace nand2tetris::jack{
              * Sets up the local symbol table and analyzes the subroutine body.
              *
              * @param sub The subroutine declaration node.
-             * @param masterTable The class-level symbol table.
+             * @param table The symbol table to use.
              */
-            void analyseSubroutine(const SubroutineDecNode& sub, const SymbolTable& masterTable);
+            void analyseSubroutine(const SubroutineDecNode& sub,SymbolTable& table);
 
             /**
              * @brief Analyzes a list of statements.
