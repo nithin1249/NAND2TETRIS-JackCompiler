@@ -81,7 +81,7 @@ Get the `JackCompiler_Release.zip` from the **[Releases Page](https://github.com
    chmod +x install.sh
    ./install.sh
 
-### 4.USAGE
+### 4. USAGE
 
 1. Compile a project (produces .vm files):
    jack <path_to_project_folder>
