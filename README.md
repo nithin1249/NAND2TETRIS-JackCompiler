@@ -9,7 +9,7 @@ A high-performance, cross-platform compiler for the Jack programming language.
 
 This project goes beyond the standard Nand2Tetris course requirements by implementing a **modern, modular compilation pipeline**. It serves as a robust Frontend Compiler, currently configured to translate high-level `.jack` source code into optimized Virtual Machine (`.vm`) intermediate code, but designed to target any architecture.
 
-**[📥 Download Latest Release](LINK_TO_YOUR_GITHUB_RELEASES_PAGE)** *(Replace with your actual URL)*
+**[📥 Download Latest Release](https://github.com/nithin1249/NAND2TETRIS-ToolChain/releases)** 
 
 ---
 
@@ -57,7 +57,7 @@ We are working on a backend extension that translates the parsed AST directly in
 ## 📦 Installation
 
 ### 1. Download
-Get the `JackCompiler_Release.zip` from the **[Releases Page](LINK_TO_YOUR_GITHUB_RELEASES_PAGE)**.
+Get the `JackCompiler_Release.zip` from the **[Releases Page](https://github.com/nithin1249/NAND2TETRIS-ToolChain/releases)**.
 
 ### 2. FOLDER CONTENTS of ZIP File:
 - bin/      : Compiler binaries for Windows, macOS, and Linux.
