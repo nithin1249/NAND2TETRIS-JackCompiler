@@ -13,12 +13,12 @@
 
 
 
-#include "Compiler/Tokenizer/Tokenizer.h"
-#include "Compiler/Parser/Parser.h"
-#include "Compiler/Parser/AST.h"
-#include "Compiler/SemanticAnalyser/GlobalRegistry.h"
-#include "Compiler/SemanticAnalyser/SemanticAnalyser.h"
-#include "Compiler/CodeGenerator/CodeGenerator.h"
+#include "Tokenizer/Tokenizer.h"
+#include "Parser/Parser.h"
+#include "Parser/AST.h"
+#include "SemanticAnalyser/GlobalRegistry.h"
+#include "SemanticAnalyser/SemanticAnalyser.h"
+#include "CodeGenerator/CodeGenerator.h"
 
 
 #ifdef _WIN32

@@ -6,24 +6,12 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF) # Ensure strictly standard C++)
 
 
-add_executable(NAND2TETRIS main.cpp
-        Compiler/Tokenizer/Tokenizer.cpp
-        Compiler/Tokenizer/Tokenizer.h
-        Compiler/Tokenizer/TokenTypes.h
-        Compiler/Parser/AST.h
-        Compiler/Parser/Parser.cpp
-        Compiler/Parser/Parser.h
-        Compiler/SemanticAnalyser/SymbolTable.cpp
-        Compiler/SemanticAnalyser/SymbolTable.h
-        Compiler/SemanticAnalyser/GlobalRegistry.cpp
-        Compiler/SemanticAnalyser/GlobalRegistry.h
-        Compiler/SemanticAnalyser/SemanticAnalyser.cpp
-        Compiler/SemanticAnalyser/SemanticAnalyser.h
-        Compiler/VMWriter/VMWriter.cpp
-        Compiler/VMWriter/VMWriter.h
-        Compiler/CodeGenerator/CodeGenerator.cpp
-        Compiler/CodeGenerator/CodeGenerator.h
+file(GLOB_RECURSE SOURCES
+        "Compiler/*.cpp"
+        "Compiler/*.h"
 )
+
+add_executable(NAND2TETRIS ${SOURCES})
 
 if(WIN32)
     target_link_libraries(NAND2TETRIS psapi)
@@ -34,11 +22,28 @@ if(APPLE)
     set_target_properties(NAND2TETRIS PROPERTIES OUTPUT_NAME "NAND2TETRIS_mac")
 elseif(WIN32)
     # On Windows -> produces "jack_win.exe" (CMake adds .exe automatically)
-    set_target_properties(NAND2TETRIS PROPERTIES OUTPUT_NAME "JackCompiler_Release/bin/NAND2TETRIS_win.exe")
+    set_target_properties(NAND2TETRIS PROPERTIES OUTPUT_NAME "NAND2TETRIS_win.exe")
 elseif(UNIX)
     # On Linux -> produces "jack_linux"
-    set_target_properties(NAND2TETRIS PROPERTIES OUTPUT_NAME "JackCompiler_Release/bin/NAND2TETRIS_linux")
+    set_target_properties(NAND2TETRIS PROPERTIES OUTPUT_NAME "NAND2TETRIS_linux")
 endif()
+
+install(TARGETS NAND2TETRIS DESTINATION bin)
+install(DIRECTORY os DESTINATION .)
+install(DIRECTORY tools DESTINATION .)
+install(DIRECTORY JackCode DESTINATION .)
+if(WIN32)
+    # Windows only needs the batch file
+    install(FILES scripts/install.bat DESTINATION .)
+
+elseif(UNIX)
+    # Mac & Linux (UNIX) only need the shell script
+    install(PROGRAMS scripts/install.sh DESTINATION .)
+
+endif()
+install(FILES docs/RELEASE_README.txt
+        DESTINATION .
+        RENAME README.txt)
 
 
 

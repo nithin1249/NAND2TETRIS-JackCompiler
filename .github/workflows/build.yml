@@ -1,0 +1,50 @@
+name: Cross-Platform Build
+
+on:
+  push:
+    branches: [ main, master ]
+  pull_request:
+    branches: [ main, master ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    name: Build on ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            artifact_name: Linux
+          - os: windows-latest
+            artifact_name: Windows
+          - os: macos-latest
+            artifact_name: macOS
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Configure CMake
+        # We configure the build folder
+        run: cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
+
+      - name: Build Binary
+        # We compile the code
+        run: cmake --build build --config Release --parallel
+
+      - name: Package (Install)
+        # --- THE MAGIC STEP ---
+        # This tells CMake: "Execute the install() commands from CMakeLists.txt"
+        # 1. It puts the binaries, docs, os, and scripts into a folder named 'dist'
+        # 2. Because of your CMake update, it AUTOMATICALLY picks install.bat for Windows
+        #    and install.sh for Mac/Linux.
+        run: cmake --install build --config Release --prefix dist
+
+      - name: Upload Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: JackCompiler-${{ matrix.artifact_name }}
+          # We upload the entire 'dist' folder (which contains bin/, os/, scripts/, etc.)
+          path: dist/

@@ -1,0 +1,7 @@
+class Main {
+    function void main() {
+        //Code the main as you want you can use any of the jack code and compile them together.
+        //Play around with the compiler.
+        return;
+    }
+}
