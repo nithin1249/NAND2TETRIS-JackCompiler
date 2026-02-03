@@ -1,4 +1,4 @@
-name: Cross-Platform Build & Release
+name: Jack Compiler
 
 on:
   push:
