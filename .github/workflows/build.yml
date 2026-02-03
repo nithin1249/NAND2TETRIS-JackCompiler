@@ -1,11 +1,16 @@
-name: Cross-Platform Build
+name: Cross-Platform Build & Release
 
 on:
   push:
     branches: [ main, master ]
+    tags:
+      - 'v*'  # Triggers only when you push a tag like v1.0, v2.1, etc.
   pull_request:
     branches: [ main, master ]
   workflow_dispatch:
+
+permissions:
+  contents: write  # REQUIRED: Allows this script to create Releases
 
 jobs:
   build:
@@ -27,24 +32,26 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Configure CMake
-        # We configure the build folder
         run: cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
 
       - name: Build Binary
-        # We compile the code
         run: cmake --build build --config Release --parallel
 
       - name: Package (Install)
-        # --- THE MAGIC STEP ---
-        # This tells CMake: "Execute the install() commands from CMakeLists.txt"
-        # 1. It puts the binaries, docs, os, and scripts into a folder named 'dist'
-        # 2. Because of your CMake update, it AUTOMATICALLY picks install.bat for Windows
-        #    and install.sh for Mac/Linux.
+        # Puts everything into the 'dist' folder
         run: cmake --install build --config Release --prefix dist
 
-      - name: Upload Artifacts
-        uses: actions/upload-artifact@v4
+      # --- NEW STEP: Zip the Folder ---
+      # We use CMake's built-in tool to zip the 'dist' folder.
+      # This works on Windows, Linux, and Mac without needing external tools.
+      - name: Create Zip File
+        run: cmake -E tar cfv JackCompiler-${{ matrix.artifact_name }}.zip --format=zip dist/
+
+      # --- NEW STEP: Publish Release ---
+      # This only runs if you pushed a tag (v1.0).
+      # It uploads the zip file to the GitHub Releases page.
+      - name: Upload to Release
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: soft props/action-gh-release@v1
         with:
-          name: JackCompiler-${{ matrix.artifact_name }}
-          # We upload the entire 'dist' folder (which contains bin/, os/, scripts/, etc.)
-          path: dist/
+          files: JackCompiler-${{ matrix.artifact_name }}.zip
