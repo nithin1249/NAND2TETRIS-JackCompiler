@@ -302,13 +302,26 @@ int main(int argc, char* argv[]) {
 				return 1;
 			}
 
-			if (inputPathArg.extension() != ".jack") {
-				std::cerr << "Error: Invalid file type. Only .jack files are allowed." << std::endl;
-				std::cerr << "Offending file: " << inputPathArg << std::endl;
-				return 1;
+			if (fs::is_directory(inputPathArg)) {
+				bool foundAny = false;
+				// Iterate over files in the directory
+				for (const auto& entry : fs::directory_iterator(inputPathArg)) {
+					if (entry.path().extension() == ".jack") {
+						userFiles.push_back(fs::absolute(entry.path()).string());
+						foundAny = true;
+					}
+				}
+				if (!foundAny) {
+					std::cerr << "Warning: No .jack files found in folder: " << inputPathArg << std::endl;
+				}
+			} else {
+				if (inputPathArg.extension() != ".jack") {
+					std::cerr << "Error: Invalid file type. Only .jack files are allowed." << std::endl;
+					std::cerr << "Offending file: " << inputPathArg << std::endl;
+					return 1;
+				}
+				userFiles.push_back(fs::absolute(inputPathArg).string());
 			}
-
-			userFiles.push_back(fs::absolute(inputPathArg).string());
 		}
 
 		if (userFiles.empty()) {

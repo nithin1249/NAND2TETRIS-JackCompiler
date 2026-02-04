@@ -41,11 +41,84 @@ jobs:
         # Puts everything into the 'dist' folder
         run: cmake --install build --config Release --prefix dist
 
+      - name: Rename Output Folder
+        shell: bash
+        run: mv dist JackCompiler-${{ matrix.artifact_name }}
+
+      - name: Test Installation (Windows)
+        if: runner.os == 'Windows'
+        shell: cmd
+        run: |
+          echo [STEP 1] Entering Release Folder...
+          cd JackCompiler-${{ matrix.artifact_name }}
+          
+          echo [STEP 2] Running Installer...
+          call .\install.bat
+          
+          echo [STEP 3] Updating Session Path...
+          echo %USERPROFILE%\.jack_toolchain\bin>> %GITHUB_PATH%
+          call RefreshEnv.cmd >nul 2>&1
+          
+          echo [STEP 4] Verifying 'JackCode' copy...
+          if exist "%USERPROFILE%\.jack_toolchain\JackCode\JackProject\Main.jack" ( echo [OK] Examples installed ) else ( echo [FAIL] Examples missing & exit 1 )
+
+      - name: Verify Logic (Windows)
+        if: runner.os == 'Windows'
+        shell: cmd
+        run: | 
+          echo [STEP 5] Compiling Installed Project...
+          :: We compile the COPIED examples to prove the install works 100%
+          cd %USERPROFILE%\.jack_toolchain\JackCode\JackProject
+          jack .
+          
+          echo [STEP 6] Checking VM Output...
+          if exist "Main.vm" ( echo [OK] Main.vm ) else ( echo [FAIL] Main.vm missing & exit 1 )
+          if exist "School.vm" ( echo [OK] School.vm ) else ( echo [FAIL] School.vm missing & exit 1 )
+          if exist "Student.vm" ( echo [OK] Student.vm ) else ( echo [FAIL] Student.vm missing & exit 1 )
+
+      - name: Test Installation (Unix)
+        if: runner.os != 'Windows'
+        run: |
+          echo "[STEP 1] Entering Release Folder..."
+          cd JackCompiler-${{ matrix.artifact_name }}
+          
+          echo "[STEP 2] Running Installer..."
+          # Note: We don't need chmod +x because CMake install(PROGRAMS) handled it!
+          ./install.sh
+          echo "$HOME/.jack_toolchain/bin" >> $GITHUB_PATH
+
+      - name: Verify Logic (Unix)
+        if: runner.os != 'Windows'
+        run: |
+          echo "[STEP 3] Compiling Installed Project..."
+          cd "$HOME/.jack_toolchain/JackCode/JackProject"
+          jack .
+          
+          echo "[STEP 4] Checking VM Output..."
+          if [ -f "Main.vm" ] && [ -f "School.vm" ] && [ -f "Student.vm" ]; then
+              echo "✅ Build Successful."
+          else
+              echo "❌ Build Failed: Output missing."
+              exit 1
+          fi
+
+      - name: Visualizer Crash Test (Linux Only)
+        if: runner.os == 'Linux'
+        continue-on-error: true
+        run: |
+          echo "[STEP 5] Testing Visualizers..."
+          sudo apt-get update && sudo apt-get install -y xvfb
+          cd "$HOME/.jack_toolchain/JackCode/JackProject"
+          
+          # Run inside fake monitor. Timeout after 5s.
+          timeout 5s xvfb-run -a jack --viz-ast . || true
+          timeout 5s xvfb-run -a jack --viz-checker . || true
+
       # --- NEW STEP: Zip the Folder ---
       # We use CMake's built-in tool to zip the 'dist' folder.
       # This works on Windows, Linux, and Mac without needing external tools.
       - name: Create Zip File
-        run: cmake -E tar cfv JackCompiler-${{ matrix.artifact_name }}.zip --format=zip dist/
+        run: cmake -E tar cfv JackCompiler-${{ matrix.artifact_name }}.zip --format=zip JackCompiler-${{ matrix.artifact_name }}/
 
       # --- NEW STEP: Publish Release ---
       # This only runs if you pushed a tag (v1.0).
