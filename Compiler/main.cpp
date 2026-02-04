@@ -242,8 +242,6 @@ void runBatchAstViz(const std::vector<CompilationUnit>& units) {
 
 		fs::path xmlPath = getTempPath(xmlFilename);
 
-		std::cout << "Generated: " << xmlPath.string() << std::endl;
-
 		std::ofstream xmlFile(xmlPath);
 		unit.ast->printXml(xmlFile, 0);
 		xmlFile.close();
