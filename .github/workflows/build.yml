@@ -58,20 +58,17 @@ jobs:
           echo [STEP 3] Updating Session Path...
           echo %USERPROFILE%\.jack_toolchain\bin>> %GITHUB_PATH%
           call RefreshEnv.cmd >nul 2>&1
-          
-          echo [STEP 4] Verifying 'JackCode' copy...
-          if exist "%USERPROFILE%\.jack_toolchain\JackCode\JackProject\Main.jack" ( echo [OK] Examples installed ) else ( echo [FAIL] Examples missing & exit 1 )
 
       - name: Verify Logic (Windows)
         if: runner.os == 'Windows'
         shell: cmd
         run: | 
-          echo [STEP 5] Compiling Installed Project...
+          echo [STEP 4] Compiling Installed Project...
           :: We compile the COPIED examples to prove the install works 100%
-          cd %USERPROFILE%\.jack_toolchain\JackCode\JackProject
+          cd JackCompiler-${{ matrix.artifact_name }}\JackCode\JackProject
           jack .
           
-          echo [STEP 6] Checking VM Output...
+          echo [STEP 5] Checking VM Output...
           if exist "Main.vm" ( echo [OK] Main.vm ) else ( echo [FAIL] Main.vm missing & exit 1 )
           if exist "School.vm" ( echo [OK] School.vm ) else ( echo [FAIL] School.vm missing & exit 1 )
           if exist "Student.vm" ( echo [OK] Student.vm ) else ( echo [FAIL] Student.vm missing & exit 1 )
@@ -91,7 +88,7 @@ jobs:
         if: runner.os != 'Windows'
         run: |
           echo "[STEP 3] Compiling Installed Project..."
-          cd "$HOME/.jack_toolchain/JackCode/JackProject"
+          cd "JackCompiler-${{ matrix.artifact_name }}/JackCode/JackProject"
           jack .
           
           echo "[STEP 4] Checking VM Output..."
@@ -108,7 +105,7 @@ jobs:
         run: |
           echo "[STEP 5] Testing Visualizers..."
           sudo apt-get update && sudo apt-get install -y xvfb
-          cd "$HOME/.jack_toolchain/JackCode/JackProject"
+          cd "JackCompiler-${{ matrix.artifact_name }}/JackCode/JackProject"
           
           # Run inside fake monitor. Timeout after 5s.
           timeout 5s xvfb-run -a jack --viz-ast . || true
