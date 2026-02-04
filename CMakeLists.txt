@@ -22,7 +22,7 @@ if(APPLE)
     set_target_properties(NAND2TETRIS PROPERTIES OUTPUT_NAME "NAND2TETRIS_mac")
 elseif(WIN32)
     # On Windows -> produces "jack_win.exe" (CMake adds .exe automatically)
-    set_target_properties(NAND2TETRIS PROPERTIES OUTPUT_NAME "NAND2TETRIS_win.exe")
+    set_target_properties(NAND2TETRIS PROPERTIES OUTPUT_NAME "NAND2TETRIS_win")
 elseif(UNIX)
     # On Linux -> produces "jack_linux"
     set_target_properties(NAND2TETRIS PROPERTIES OUTPUT_NAME "NAND2TETRIS_linux")
