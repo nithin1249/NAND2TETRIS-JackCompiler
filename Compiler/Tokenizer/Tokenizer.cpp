@@ -201,24 +201,45 @@ namespace nand2tetris::jack {
     }
 
     std::unique_ptr<Token> Tokenizer::readNumber(const std::size_t tokenline, const std::size_t tokencolumn) {
-        int value = 0;
+        std::string numStr;
+        bool isFloat = false;
 
-        // Consume consecutive digits.
-        while (pos < src.size() && std::isdigit(static_cast<unsigned char>(src[pos]))) {
-            const int digit = src[pos] - '0';
-
-            // Check for overflow BEFORE updating the value.
-            // The maximum allowed integer in Jack is 32767.
-            // If value > 3276, then value * 10 >= 32760. Adding any digit > 7 would exceed 32767.
-            if (value > 3276 || (value == 3276 && digit > 7)) {
-                errorAt(tokenline, tokencolumn, "Integer constant too large (max 32767)");
-            }
-
-            value = value * 10 + digit;
+        while (pos<src.size()) {
+            const char c=src[pos];
+            if (std::isdigit(static_cast<unsigned char>(c))) {
+                numStr += c;
+            } else if (c == '.' && !isFloat) {
+                // Lookahead: only treat as float if followed by a digit (not a method call like obj.method)
+                if (pos + 1 < src.size() && std::isdigit(static_cast<unsigned char>(src[pos + 1]))) {
+                    isFloat = true;
+                    numStr += c;
+                } else {
+                    errorAt(tokenline, tokencolumn, "Malformed float: decimal point must be followed by a digit");
+                }
+            } else break;
             advanceChar();
         }
 
-        return std::make_unique<IntToken>(value, tokenline, tokencolumn);
+        try {
+            if (isFloat) {
+                // std::stod handles the 64-bit double range (f64).
+                double val = std::stod(numStr);
+                return std::make_unique<FloatToken>(val, tokenline, tokencolumn);
+            } else {
+                // std::stoll handles the reading, but we enforce the 32-bit Jack limit.
+                const long long val = std::stoll(numStr);
+
+                // Checking the 32-bit signed max: 2,147,483,647.
+                if (val > 2147483647LL) {
+                    errorAt(tokenline, tokencolumn, "Integer constant too large for 32 bits.");
+                }
+                return std::make_unique<IntToken>(static_cast<int32_t>(val), tokenline, tokencolumn);
+            }
+        } catch (const std::out_of_range&) {
+            errorAt(tokenline, tokencolumn, isFloat ? "Float literal out of range." : "Integer literal out of range.");
+        } catch (const std::invalid_argument&) {
+            errorAt(tokenline, tokencolumn, "Invalid numeric literal.");
+        }
     }
 
     std::unique_ptr<Token> Tokenizer::readIdentifierOrKeyword(const std::size_t tokenline, const std::size_t tokencolumn) {

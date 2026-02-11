@@ -421,7 +421,7 @@ int main(int argc, char* argv[]) {
 		}
 
 	}catch (const std::exception& e) {
-		std::cerr << "\n COMPILATION FAILED" << std::endl;
+		std::cerr << "\nCOMPILATION FAILED" << std::endl;
 		std::cerr << e.what() << std::endl;
 		return 1;
 	}

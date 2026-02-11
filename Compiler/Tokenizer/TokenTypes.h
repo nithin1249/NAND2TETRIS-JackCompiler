@@ -17,6 +17,7 @@ namespace nand2tetris::jack {
         KEYWORD,        ///< A reserved keyword (e.g., class, method, int).
         SYMBOL,         ///< A symbol or operator (e.g., {, }, +, =).
         IDENTIFIER,     ///< A user-defined identifier (variable name, class name, etc.).
+        FLOAT_CONST,    ///< A floating-point constant (IEEE 754 standard for floating-point representation).
         INT_CONST,      ///< An integer constant (0-32767).
         STRING_CONST,   ///< A string constant enclosed in double quotes.
         END_OF_FILE     ///< Represents the end of the input stream.
@@ -27,7 +28,7 @@ namespace nand2tetris::jack {
      */
     enum class Keyword {
         CLASS, METHOD, FUNCTION, CONSTRUCTOR,
-        INT, BOOLEAN, CHAR, VOID,
+        INT, FLOAT, BOOLEAN, CHAR, VOID,
         VAR, STATIC, FIELD, LET, DO, IF,
         ELSE, WHILE, RETURN, TRUE_, FALSE_, NULL_, THIS_
     };
@@ -46,6 +47,7 @@ namespace nand2tetris::jack {
             case K::FUNCTION:    return "function";
             case K::CONSTRUCTOR: return "constructor";
             case K::INT:         return "int";
+            case K::FLOAT:       return "float";
             case K::CHAR:        return "char";
             case K::BOOLEAN:     return "boolean";
             case K::VOID:        return "void";
@@ -81,6 +83,7 @@ namespace nand2tetris::jack {
             {"function",    Keyword::FUNCTION},
             {"constructor", Keyword::CONSTRUCTOR},
             {"int",         Keyword::INT},
+            {"float",       Keyword::FLOAT},
             {"boolean",     Keyword::BOOLEAN},
             {"char",        Keyword::CHAR},
             {"void",        Keyword::VOID},
@@ -120,6 +123,7 @@ namespace nand2tetris::jack {
             case TokenType::SYMBOL:       return "SYMBOL";
             case TokenType::IDENTIFIER:   return "IDENTIFIER";
             case TokenType::INT_CONST:    return "INT_CONST";
+            case TokenType::FLOAT_CONST:  return "FLOAT_CONST";
             case TokenType::STRING_CONST: return "STRING_CONST";
             case TokenType::END_OF_FILE:  return "EOF";
         }
@@ -221,7 +225,7 @@ namespace nand2tetris::jack {
      */
     struct IntToken final : public Token {
         private:
-            int intVal = 0; ///< The integer value.
+            int32_t intVal = 0; ///< The integer value.
 
         public:
             /**
@@ -238,7 +242,7 @@ namespace nand2tetris::jack {
              * @brief Gets the integer value.
              * @return The integer value.
              */
-            int getInt() const { return intVal; }
+            int32_t getInt() const { return intVal; }
 
             std::string toString() const override {
                 return "[" + std::to_string(line) + ":" + std::to_string(column) + "] " +
@@ -280,6 +284,38 @@ namespace nand2tetris::jack {
             ~KeywordToken() override = default;
 
             std::string_view getValue() const override { return keywordToString(this->keyword); }
+    };
+
+    /**
+     * @brief Represents a floating-point constant token.
+     */
+    struct FloatToken final : public Token {
+        private:
+            double floatVal; ///< The floating-point value.
+
+        public:
+            /**
+             * @brief Constructs a new FloatToken.
+             *
+             * @param val The floating-point value.
+             * @param l The line number.
+             * @param c The column number.
+             */
+            explicit FloatToken(const double val, const int l, const int c)
+                : Token(TokenType::FLOAT_CONST, l, c), floatVal(val) {}
+
+            ~FloatToken() override = default;
+
+            /**
+             * @brief Gets the floating-point value.
+             * @return The floating-point value.
+             */
+            double getFloat() const { return floatVal; }
+
+            std::string toString() const override {
+                return "[" + std::to_string(line) + ":" + std::to_string(column) + "] " +
+                       typeToString(type) + " '" + std::to_string(floatVal) + "'";
+            }
     };
 
     /**
