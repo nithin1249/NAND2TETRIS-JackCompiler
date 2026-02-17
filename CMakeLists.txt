@@ -11,13 +11,28 @@ file(GLOB_RECURSE SOURCES
         "Compiler/*.h"
 )
 
-add_executable(NAND2TETRIS ${SOURCES})
+#[[ add_executable(NAND2TETRIS ${SOURCES}
+        Compiler/Parser/ASTVisitor.h
+        Compiler/Parser/PrattParser.cpp
+        Compiler/Parser/PrattParser.h)]]
+
+add_executable(parser
+        Compiler/Tokenizer/Tokenizer.h
+        Compiler/Tokenizer/Tokenizer.cpp
+        Compiler/Tokenizer/TokenTypes.h
+        Compiler/Parser/AST.h
+        Compiler/Parser/PrattParser.h
+        Compiler/Parser/PrattParser.cpp
+        test/jack_parser.cpp
+        Compiler/Parser/XMLVisitor.h
+        Compiler/Parser/XMLExporter.cpp
+        Compiler/Parser/XMLExporter.h)
 
 if(WIN32)
     target_link_libraries(NAND2TETRIS psapi)
 endif()
 
-if(APPLE)
+#[[ if(APPLE)
     # On Mac -> produces "jack_mac"
     set_target_properties(NAND2TETRIS PROPERTIES OUTPUT_NAME "NAND2TETRIS_mac")
 elseif(WIN32)
@@ -26,8 +41,9 @@ elseif(WIN32)
 elseif(UNIX)
     # On Linux -> produces "jack_linux"
     set_target_properties(NAND2TETRIS PROPERTIES OUTPUT_NAME "NAND2TETRIS_linux")
-endif()
+endif()]]
 
+#[[
 install(TARGETS NAND2TETRIS DESTINATION bin)
 install(DIRECTORY os DESTINATION .)
 install(DIRECTORY tools DESTINATION .)
@@ -43,7 +59,7 @@ elseif(UNIX)
 endif()
 install(FILES docs/RELEASE_README.txt
         DESTINATION .
-        RENAME README.txt)
+        RENAME README.txt)]]
 
 
 

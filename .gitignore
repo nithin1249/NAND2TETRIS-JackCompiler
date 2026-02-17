@@ -5,3 +5,4 @@ tests/**/*.vm
 JackCompiler_Release/
 JackCompiler_Release.zip
 Demo-JackCompiler.mov
+test/

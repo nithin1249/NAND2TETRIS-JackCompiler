@@ -6,22 +6,54 @@ import webview
 
 
 # 1. PARSER
+
+def get_node_style(tag):
+    """Maps Jack AST XML tags to a sleek, GitHub-Dark inspired color palette."""
+    styles = {
+        # Declarations (Greens)
+        "classNode":       {"f": "#238636", "s": "#2ea043"},
+        "subroutineDec":   {"f": "#238636", "s": "#2ea043"},
+        "classVarDec":     {"f": "#238636", "s": "#2ea043"},
+        "varDec":          {"f": "#238636", "s": "#2ea043"},
+
+        # Statements (Purples)
+        "letStatement":    {"f": "#8957e5", "s": "#a371f7"},
+        "ifStatement":     {"f": "#8957e5", "s": "#a371f7"},
+        "whileStatement":  {"f": "#8957e5", "s": "#a371f7"},
+        "doStatement":     {"f": "#8957e5", "s": "#a371f7"},
+        "returnStatement": {"f": "#8957e5", "s": "#a371f7"},
+
+        # Expressions & Operations (Blues/Teals)
+        "callNode":        {"f": "#1f6feb", "s": "#58a6ff"},
+        "binaryOpNode":    {"f": "#1f6feb", "s": "#58a6ff"},
+        "unaryOpNode":     {"f": "#1f6feb", "s": "#58a6ff"},
+        "arrayAccessNode": {"f": "#1f6feb", "s": "#58a6ff"},
+        "identifierNode":  {"f": "#08605f", "s": "#2bbbad"},
+
+        # Literals & Primitives (Oranges/Reds)
+        "integerConstant": {"f": "#d29922", "s": "#e3b341"},
+        "floatConstant":   {"f": "#d29922", "s": "#e3b341"},
+        "stringConstant":  {"f": "#d29922", "s": "#e3b341"},
+        "keywordConstant": {"f": "#da3633", "s": "#f85149"},
+
+        # Structural / Metadata (Grays)
+        "default":         {"f": "#30363d", "s": "#6e7681"}
+    }
+    return styles.get(tag, styles["default"])
 def parse_node(element):
     tag = element.tag
     text = element.text.strip() if element.text else ""
     label = tag
-    if text: label += f": {text}"
-    style_map = {
-        "class": {"f": "#1f6feb", "s": "#388bfd"}, "subroutineDec": {"f": "#238636", "s": "#2ea043"},
-        "doStatement": {"f": "#8957e5", "s": "#a371f7"}, "letStatement": {"f": "#8957e5", "s": "#a371f7"},
-        "ifStatement": {"f": "#d29922", "s": "#e3b341"}, "whileStatement": {"f": "#d29922", "s": "#e3b341"},
-        "returnStatement": {"f": "#da3633", "s": "#f85149"}, "identifier": {"f": "#30363d", "s": "#6e7681"},
-        "symbol": {"f": "#30363d", "s": "#8b949e"}, "integerConstant": {"f": "#1f6feb", "s": "#58a6ff"},
-        "stringConstant": {"f": "#1f6feb", "s": "#58a6ff"}, "keyword": {"f": "#da3633", "s": "#f85149"},
-        "default": {"f": "#30363d", "s": "#6e7681"}
+    if text and not list(element):
+        label = f"{tag}: {text}"
+    style = get_node_style(tag)
+
+    return {
+        "name": label,
+        "fill": style["f"],
+        "stroke": style["s"],
+        "children": [parse_node(child) for child in element]
     }
-    style = style_map.get(tag, style_map["default"])
-    return { "name": label, "fill": style["f"], "stroke": style["s"], "children": [parse_node(child) for child in element] }
 
 
 # 2. LOCAL ASSET LOADER
@@ -31,7 +63,7 @@ def get_d3_script():
     if os.path.exists(d3_path):
         try:
             with open(d3_path, "r", encoding="utf-8") as f: return f"<script>\n{f.read()}\n</script>"
-        except:
+        except Exception:
             pass
     return '<script src="https://d3js.org/d3.v7.min.js"></script>'
 
@@ -83,7 +115,7 @@ def get_html_content(files_payload, d3_script_tag):
 <body>
     <div id="ui-layer">
         <div class="card">
-            <h1>AST Visualizer</h1>
+            <h1>AST Visualizer <span id="node-count" style="background:#238636; padding:2px 6px; border-radius:10px; font-size:10px;">0 nodes</span></h1>
             <select id="file-select" onchange="loadFile(this.value)"></select>
             <div class="info">Left Click to Pan &bull; Scroll to Zoom</div>
         </div>
@@ -107,9 +139,13 @@ def get_html_content(files_payload, d3_script_tag):
 
         function loadFile(index) {{
             const root = d3.hierarchy(allFiles[index].tree);
-            const treeLayout = d3.tree().nodeSize([40, 200]);
+            const treeLayout = d3.tree().nodeSize([40, 250]);
             treeLayout(root);
             window.currentRoot = root;
+            const countBadge = document.getElementById("node-count");
+            if (countBadge) {{ 
+                countBadge.textContent = `${{root.descendants().length}} nodes`;
+            }}
             
             // Reset zoom to nicely fit the new tree
             const initialY = window.innerHeight / 2;
@@ -135,16 +171,17 @@ def get_html_content(files_payload, d3_script_tag):
             root.links().forEach(d => linkGen(d));
             ctx.stroke();
 
-            ctx.font = "600 12px sans-serif"; ctx.textBaseline = "middle"; ctx.lineWidth = 1.5;
+            ctx.font = "600 12px monospace"; ctx.textBaseline = "middle"; 
             root.descendants().forEach(d => {{
                 if (d.x * k + ty < -50 || d.x * k + ty > height + 50) return;
-                const w = Math.max(120, ctx.measureText(d.data.name).width + 30);
+                const textWidth = ctx.measureText(d.data.name).width;
+                const w = Math.max(110, textWidth + 20); // Dynamic Node Sizing
                 const h = 26, x = d.y, y = d.x - 13;
                 
                 ctx.beginPath(); ctx.roundRect(x, y, w, h, 6); 
                 ctx.fillStyle = d.data.fill; ctx.fill();
                 ctx.strokeStyle = d.data.stroke; ctx.stroke();
-                if (k > 0.4) {{ ctx.fillStyle = "#fff"; ctx.fillText(d.data.name, x + 10, d.x + 1); }}
+                if (k > 0.4) {{ ctx.fillStyle = "#fff"; ctx.fillText(d.data.name, x + (w - textWidth) / 2, d.x + 1); }}
             }});
             ctx.restore();
         }}
@@ -187,7 +224,6 @@ if __name__ == "__main__":
 
         try:
             tree = ET.parse(xml_path)
-
             # Extract clean name: "Main_18293.xml" -> "Main.jack"
             raw_name = os.path.basename(xml_path)
             display_name = raw_name.split('_')[0] + ".jack" if "_" in raw_name else raw_name

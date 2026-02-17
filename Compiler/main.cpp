@@ -369,7 +369,7 @@ int main(int argc, char* argv[]) {
 
 
 		// --- PHASE 2: SEMANTIC ANALYSIS ---
-		const auto startAnalyze = std::chrono::high_resolution_clock::now();
+		/*const auto startAnalyze = std::chrono::high_resolution_clock::now();
 		std::vector<std::future<void>> analysisTasks;
 
 		analysisTasks.reserve(units.size());
@@ -381,6 +381,7 @@ int main(int argc, char* argv[]) {
 			t.get();
 		}
 		const auto endAnalyze = std::chrono::high_resolution_clock::now();
+		*/
 
 		// --- PHASE 3: CODE GENERATION ---
 		const auto startCodeGen = std::chrono::high_resolution_clock::now();
@@ -403,7 +404,8 @@ int main(int argc, char* argv[]) {
 		std::cout << "========================================" << std::endl;
 		std::cout << " Files Compiled: " << units.size() << std::endl;
 		std::cout << " Parsing:        " << std::chrono::duration<double, std::milli>(endParse - startParse).count() << " ms" << std::endl;
-		std::cout << " Static Analysis:" << std::chrono::duration<double, std::milli>(endAnalyze - startAnalyze).count() << " ms" << std::endl;
+		//std::cout << " Static Analysis:" << std::chrono::duration<double, std::milli>(endAnalyze - startAnalyze)
+		//.count() << " ms" << std::endl;
 		std::cout << " Code Gen:       " << std::chrono::duration<double, std::milli>(endCodeGen - startCodeGen).count() << " ms" << std::endl;
 		std::cout << " Total Time:     " << std::chrono::duration<double, std::milli>(endTotal - startTotal).count() << " ms" << std::endl;
 		std::cout << " Peak Memory:    " << getPeakMemoryMB() << " MB" << std::endl;
