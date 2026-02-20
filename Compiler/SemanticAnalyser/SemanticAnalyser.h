@@ -8,7 +8,7 @@
 
 #include "GlobalRegistry.h"
 #include "SymbolTable.h"
-#include "../Parser/AST.h"
+#include "../AST/AST.h"
 
 namespace nand2tetris::jack{
 

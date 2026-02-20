@@ -21,12 +21,12 @@ namespace nand2tetris::jack {
 		/**
 		 * @brief Generates XML from an AST and writes it to the provided output stream.
 		 */
-		static void generate(Node* astRoot, std::ostream& out);
+		static void generate(const Node* astRoot, std::ostream& out);
 
 		/**
 		 * @brief Helper function to generate XML directly to a file.
 		 */
-		static bool generateToFile(Node* astRoot, const std::string& filename);
+		static bool generateToFile(const Node* astRoot, const std::string& filename);
 	};
 }
 

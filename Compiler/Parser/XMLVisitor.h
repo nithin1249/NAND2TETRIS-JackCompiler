@@ -2,11 +2,11 @@
 // Created by Nithin Kondabathini on 18/2/2026.
 //
 
-#ifndef NAND2TETRIS_XMLVISITOR_H
-#define NAND2TETRIS_XMLVISITOR_H
+#ifndef NAND2TETRIS_XML_VISITOR_H
+#define NAND2TETRIS_XML_VISITOR_H
 
-#include "ASTVisitor.h"
-#include "AST.h"
+#include "../AST/ASTVisitor.h"
+#include "../AST/AST.h"
 #include <iostream>
 #include <string>
 
@@ -36,7 +36,7 @@ namespace nand2tetris::jack {
 
 		static std::string escapeXML(const std::string_view text){
 			std::string result;
-			for (char c : text) {
+			for (const char c : text) {
 				switch (c) {
 					case '<': result += "&lt;"; break;
 					case '>': result += "&gt;"; break;
@@ -53,63 +53,55 @@ namespace nand2tetris::jack {
 			out << "<" << tag << "> " << escapeXML(value) << " </" << tag << ">\n";
 		}
 
-		std::string formatType(const Type& type) {
-			std::string s = std::string(type.baseType);
-			if (!type.genericArgs.empty()) {
-				s += "<";
-				for (size_t i = 0; i < type.genericArgs.size(); ++i) {
-					s += formatType(*type.genericArgs[i]);
-					if (i < type.genericArgs.size() - 1) s += ", ";
-				}
-				s += ">";
-			}
-			return s;
-		}
-
 		public:
 			explicit XMLVisitor(std::ostream& outputStream) : out(outputStream) {}
 
-			void print(Node* node) {
+			void print(const Node* node) {
 				if (node) {
 					node->accept(*this);
 				}
 			}
 
-			void visit(ClassNode& node) override {
+			void visit(const ClassNode& node) override {
 				openTag("classNode");
 				printInline("className", node.getClassName());
 
-				for (const auto& var : node.getClassVars()) print(var.get());
-				for (const auto& sub : node.getSubroutines()) print(sub.get());
+
+				// Only print if there's actually something there
+
+				for (const auto& var : node.getClassVars()) {
+					print(var); // Handles each ClassVarDecNode
+				}
+
+				for (const auto& sub:node.getSubroutines()) {
+					print(sub);
+				}
+
 
 				closeTag("classNode");
 			}
 
-			void visit(ClassVarDecNode& node) override {
+			void visit(const ClassVarDecNode& node) override {
 				openTag("classVarDec");
 				const std::string kindStr = (node.getKind() == ClassVarKind::STATIC) ? "static" : "field";
 				printInline("kind", kindStr);
-				if (node.getType()) {
-					printInline("type", formatType(*node.getType())); // Now shows Array<School>
-				}
+				printInline("type", node.getType().formatType()); // Now shows Array<School>
 				for (const auto& name : node.getVarNames()) {
 					printInline("name", name);
 				}
 				closeTag("classVarDec");
 			}
 
-			void visit(VarDecNode& node) override {
+			void visit(const VarDecNode& node) override {
 				openTag("varDec");
-				if (node.getType()) {
-					printInline("type", formatType(*node.getType())); // Now shows Array<School>
-				}
+				printInline("type", node.getType().formatType()); // Now shows Array<School>
 				for (const auto& name : node.getVarNames()) {
 					printInline("name", name);
 				}
 				closeTag("varDec");
 			}
 
-			void visit(SubroutineDecNode& node) override {
+			void visit(const SubroutineDecNode& node) override {
 				openTag("subroutineDec");
 
 				std::string subType;
@@ -119,33 +111,40 @@ namespace nand2tetris::jack {
 
 				printInline("subroutineType", subType);
 
-				if (node.getReturnType()) {
-					printInline("returnType", formatType(*node.getReturnType()));
-				}
+				printInline("returnType",node.getReturnType().formatType());
 
 				printInline("name", node.getName());
 
-				openTag("parameterList");
-				for (const auto&[type, name] : node.getParams()) {
-					openTag("parameter");
-					if (type) printInline("type", formatType(*type));
-					printInline("name", name);
-					closeTag("parameter");
+				if (!node.getParams().empty()) {
+					openTag("parameterList");
+					for (const auto& param: node.getParams()) {
+						openTag("parameter");
+						printInline("type",param->getType().formatType());
+						printInline("name", param->getName());
+						closeTag("parameter");
+					}
+					closeTag("parameterList");
 				}
-				closeTag("parameterList");
 
-				openTag("subroutineBody");
-				for (const auto& local : node.getLocals()) print(local.get());
+				if (!node.getLocals().empty() || !node.getStatements().empty()) {
+					openTag("subroutineBody");
 
-				openTag("statements");
-				for (const auto& stmt : node.getStatements()) print(stmt.get());
-				closeTag("statements");
+					for (const auto& var : node.getLocals()) {
+						print(var);
+					}
 
-				closeTag("subroutineBody");
+					if (!node.getStatements().empty()) {
+						openTag("statements");
+						for (const auto& stmt : node.getStatements()) print(stmt);
+						closeTag("statements");
+					}
+
+					closeTag("subroutineBody");
+				}
 				closeTag("subroutineDec");
 			}
 
-			void visit(LetStatementNode& node) override {
+			void visit(const LetStatementNode& node) override {
 				openTag("letStatement");
 				printInline("varName", node.getVarName());
 				if (node.getIndex()) {
@@ -154,48 +153,54 @@ namespace nand2tetris::jack {
 					closeTag("index");
 				}
 				openTag("value");
-				print(node.getValue());
+				print(&node.getValue());
 				closeTag("value");
 				closeTag("letStatement");
 			}
 
-			void visit(IfStatementNode& node) override {
+			void visit(const IfStatementNode& node) override {
 				openTag("ifStatement");
 				openTag("condition");
-				print(node.getCondition());
+				print(&node.getCondition());
 				closeTag("condition");
 
-				openTag("ifBranch");
-				for (const auto& stmt : node.getIfBranch()) print(stmt.get());
-				closeTag("ifBranch");
+				if (!node.getIfBranch().empty()) {
+					openTag("ifBranch");
+					for (const auto& stmt : node.getIfBranch()) print(stmt);
+					closeTag("ifBranch");
+				}
 
 				if (!node.getElseBranch().empty()) {
 					openTag("elseBranch");
-					for (const auto& stmt : node.getElseBranch()) print(stmt.get());
+					for (const auto& stmt : node.getElseBranch()) print(stmt);
 					closeTag("elseBranch");
 				}
 				closeTag("ifStatement");
 			}
 
-			void visit(WhileStatementNode& node) override {
+			void visit(const WhileStatementNode& node) override {
 				openTag("whileStatement");
 				openTag("condition");
-				print(node.getCondition());
+				print(&node.getCondition());
 				closeTag("condition");
 
-				openTag("body");
-				for (const auto& stmt : node.getBody()) print(stmt.get());
-				closeTag("body");
+				if (!node.getBody().empty()) {
+					openTag("body");
+					for (const auto& stmt : node.getBody()) print(stmt);
+					closeTag("body");
+				}
+
+
 				closeTag("whileStatement");
 			}
 
-			void visit(DoStatementNode& node) override {
+			void visit(const DoStatementNode& node) override {
 				openTag("doStatement");
-				print(node.getCall());
+				print(&node.getCall());
 				closeTag("doStatement");
 			}
 
-			void visit(ReturnStatementNode& node) override {
+			void visit(const ReturnStatementNode& node) override {
 				openTag("returnStatement");
 				if (node.getExpression()) {
 					print(node.getExpression());
@@ -203,7 +208,7 @@ namespace nand2tetris::jack {
 				closeTag("returnStatement");
 			}
 
-			void visit(CallNode& node) override {
+			void visit(const CallNode& node) override {
 				openTag("callNode");
 				if (node.getReceiver()) {
 					openTag("receiver");
@@ -212,77 +217,80 @@ namespace nand2tetris::jack {
 				}
 				printInline("methodName", node.getFunctionName());
 
-				openTag("expressionList");
-				for (const auto& arg : node.getArgs()) {
-					print(arg.get());
+				if (!node.getArgs().empty()) {
+					openTag("expressionList");
+					for (const auto& arg : node.getArgs()) {
+						print(arg);
+					}
+					closeTag("expressionList");
 				}
-				closeTag("expressionList");
+
 				closeTag("callNode");
 			}
 
-			void visit(IdentifierNode& node) override {
+			void visit(const IdentifierNode& node) override {
 				openTag("identifierNode");
 				printInline("name", node.getName());
 				if (!node.getGenericArgs().empty()) {
 					openTag("generics");
 					for (const auto& type : node.getGenericArgs()) {
-						printInline("typeArg",formatType(*type)); // Use formatType here too!
+						printInline("typeArg",type->formatType()); // Use formatType here too!
 					}
 					closeTag("generics");
 				}
+
 				closeTag("identifierNode");
 			}
 
-			void visit(BinaryOpNode& node) override {
+			void visit(const BinaryOpNode& node) override {
 				openTag("binaryOpNode");
 				openTag("left");
-				print(node.getLeft());
+				print(&node.getLeft());
 				closeTag("left");
 
 				printInline("op", std::string(1, node.getOp()));
 
 				openTag("right");
-				print(node.getRight());
+				print(&node.getRight());
 				closeTag("right");
 				closeTag("binaryOpNode");
 			}
 
-			void visit(UnaryOpNode& node) override {
+			void visit(const UnaryOpNode& node) override {
 				openTag("unaryOpNode");
 				printInline("op", std::string(1, node.getOp()));
-				print(node.getTerm());
+				print(&node.getTerm());
 				closeTag("unaryOpNode");
 			}
 
-			void visit(ArrayAccessNode& node) override {
+			void visit(const ArrayAccessNode& node) override {
 				openTag("arrayAccessNode");
 				openTag("base");
-				print(node.getBase());
+				print(&node.getBase());
 				closeTag("base");
 
 				openTag("index");
-				print(node.getIndex());
+				print(&node.getIndex());
 				closeTag("index");
 				closeTag("arrayAccessNode");
 			}
-			void visit(IntegerLiteralNode& node) override {
+			void visit(const IntegerLiteralNode& node) override {
 				printInline("integerConstant", std::to_string(node.getInt()));
 			}
 
-			void visit(FloatLiteralNode& node) override {
+			void visit(const FloatLiteralNode& node) override {
 				printInline("floatConstant", std::to_string(node.getFloat()));
 			}
 
-			void visit(StringLiteralNode& node) override {
+			void visit(const StringLiteralNode& node) override {
 				printInline("stringConstant", node.getString());
 			}
 
-			void visit(KeywordLiteralNode& node) override {
-				// Assuming you have a way to convert Keyword enum to string
+			void visit(const KeywordLiteralNode& node) override {
 				printInline("keywordConstant", keywordToString(node.getKeyword()));
 			}
 	};
 
 }
 
-#endif //NAND2TETRIS_XMLVISITOR_H
+#endif //NAND2TETRIS_XML_VISITOR_H

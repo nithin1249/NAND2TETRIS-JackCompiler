@@ -3,9 +3,11 @@
 //
 
 #include "PrattParser.h"
+#include "../TypeRegistry/TypeRegistry.h"
 
 namespace nand2tetris::jack {
-	PrattParser::PrattParser(Tokenizer& tokenizer):tokenizer(tokenizer) {
+	PrattParser::PrattParser(Tokenizer& tokenizer, GlobalRegistry& registry, TypeRegistry& types):tokenizer(tokenizer),
+	registry(registry),typeRegistry(types) {
 		currentToken = &tokenizer.current();
 		initializeRules();
 	}
@@ -70,6 +72,7 @@ namespace nand2tetris::jack {
         textRules["null"]  = { &PrattParser::parseKeywordNud, nullptr, Precedence::LOWEST };
     }
 
+	// ReSharper disable once CppDFAConstantParameter
 	std::unique_ptr<ExpressionNode> PrattParser::parseExpression(const Precedence precedence) {
 		const NudFunc prefixRule = getRule(currentToken).nud;
 		if (!prefixRule) {
@@ -162,36 +165,49 @@ namespace nand2tetris::jack {
 		}
 	}
 
-	std::unique_ptr<Type> PrattParser::parseType(const bool allowVoid) {
-		auto type = std::make_unique<Type>();
+	const Type* const PrattParser::parseType(const bool allowVoid) {
 		const auto val = currentToken->getValue();
-
-		const bool isPrimitive = (val == "int" || val == "char" || val == "boolean" || val =="float");
+		const bool isPrimitive = (val == "int" || val == "char" || val == "boolean" || val == "float");
 		const bool isVoid = (val == "void");
 		const bool isClass = (currentToken->getType() == TokenType::IDENTIFIER);
 
-		if (isPrimitive || isClass || (isVoid && allowVoid)) {
-			type->baseType = val;
-			advance();
-		} else {
+		// --- 1. Error Handling with Sentinel ---
+		if (!(isPrimitive || isClass || (isVoid && allowVoid))) {
+			// ReSharper disable once CppDFAConstantConditions
 			if (isVoid && !allowVoid) {
 				reportError("Variable cannot be of type 'void'.");
 			} else {
 				reportError("Expected a valid type.");
 			}
+			// Return the sentinel 'Error' talent instead of nullptr
 			return nullptr;
 		}
 
+		// --- 2. Build the Temporary Type Structure ---
+		// We use a local Type object as a builder
+		Type builder(val);
+		advance();
+
+		// --- 3. Recursive Generic Resolution ---
 		if (match(TokenType::SYMBOL, "<")) {
 			do {
-				if (std::unique_ptr<Type> arg = parseType()) {
-					type->genericArgs.push_back(std::move(arg));
-				}
+				// Recurse to get the pooled pointer of the generic argument
+				const Type* const arg = parseType();
+
+				// To add to our temporary builder, we must provide a unique_ptr copy
+				builder.addGenericArg(std::make_unique<Type>(*arg));
+
 			} while (match(TokenType::SYMBOL, ","));
 
 			expect(TokenType::SYMBOL, ">");
+		}else if (val == "Array") {
+			reportError("Type 'Array' must specify a generic type (e.g., Array<int>).");
+			return nullptr; // Use the sentinel for stability
 		}
-		return type;
+
+		// --- 4. Finalize in the Talent Pool ---
+		// Register the builder and return the stable, O(1) lookup pointer
+		return typeRegistry.getOrCreate(builder);
 	}
 
 	std::vector<Parameter> PrattParser::parseParameterList() {
@@ -202,27 +218,28 @@ namespace nand2tetris::jack {
 		}
 
 		do {
-			Parameter param;
+			//Parameter param;
 
 			// 1. Parse the Type (int, char, MyClass<T>, etc.)
-			param.type = parseType();
+			auto const baseType = parseType();
 
-			if (!param.type) {
+			if (!baseType) {
 				// Error reported in parseType.
 				// We don't sync here; let the caller (parseSubroutineDec) handle it.
-				return parameters;
+				return  parameters;
 			}
 
+			std::string_view name;
 			// 2. Parse the Identifier (the name of the parameter)
 			if (currentToken->getType() == TokenType::IDENTIFIER) {
-				param.name = currentToken->getValue();
+				name = currentToken->getValue();
 				advance();
 			} else {
 				reportError("Expected parameter name after type.");
 				return parameters;
 			}
 
-			parameters.push_back(std::move(param));
+			parameters.emplace_back(baseType,name);
 
 			// 3. If there's a comma, keep going.
 		} while (match(TokenType::SYMBOL, ","));
@@ -237,6 +254,13 @@ namespace nand2tetris::jack {
 		expect(TokenType::KEYWORD, "class");
 		auto className = currentToken->getValue();
 		expect(TokenType::IDENTIFIER);
+
+		currentClassName = className;
+
+		if (!registry.registerClass(className)) {
+			reportError("Class '" + std::string(className) + "' is already defined.");
+		}
+
 		expect(TokenType::SYMBOL, "{");
 
 		std::vector<std::unique_ptr<ClassVarDecNode>> vars;
@@ -288,9 +312,9 @@ namespace nand2tetris::jack {
 		advance();
 
 		//parse the type
-		std::shared_ptr type = parseType();
+		auto* const type = parseType();
 		if (!type) {
-			synchronize(); // This is a statement-level function, so we sync here.
+			synchronize();
 			return nullptr;
 		}
 
@@ -319,7 +343,7 @@ namespace nand2tetris::jack {
 			int line = currentToken->getLine();
 			int column = currentToken->getColumn();
 
-			if (std::shared_ptr type = parseType()) {
+			if (auto type = parseType()) {
 				std::vector<std::string_view> names;
 				do {
 					if (currentToken->getType() == TokenType::IDENTIFIER) {
@@ -327,7 +351,8 @@ namespace nand2tetris::jack {
 						advance();
 					}else {
 						reportError("Expected variable name after type in 'var' declaration.");
-						break;
+						synchronize();
+						return {};
 					}
 				}while (match(TokenType::SYMBOL, ","));
 
@@ -335,6 +360,7 @@ namespace nand2tetris::jack {
 				declarations.push_back(std::make_unique<VarDecNode>(type, std::move(names), line, column));
 			}else {
 				synchronize();
+				return declarations;
 			}
 		}
 
@@ -354,7 +380,7 @@ namespace nand2tetris::jack {
 		advance();
 
 		// Return Type and Name
-		const std::shared_ptr returnType = parseType(true);
+		auto returnType = parseType(true);
 		if (!returnType) { synchronize(); return nullptr; }
 
 		std::string_view name = currentToken->getValue();
@@ -364,6 +390,18 @@ namespace nand2tetris::jack {
 		expect(TokenType::SYMBOL, "(");
 		auto params = parseParameterList();
 		expect(TokenType::SYMBOL, ")");
+
+		std::vector<const Type*> paramTypes;
+		paramTypes.reserve(params.size());
+		for (const auto& param : params) {
+			paramTypes.emplace_back(&param.getType());
+		}
+
+		MethodSignature sig(returnType, std::move(paramTypes), subType, line, column);
+
+		if (!registry.registerMethod(currentClassName, name, std::move(sig))) {
+			reportError("Subroutine '" + std::string(name) + "' is already defined.");
+		}
 
 		// Subroutine Body: { varDecs statements }
 		expect(TokenType::SYMBOL, "{");
@@ -586,13 +624,13 @@ namespace nand2tetris::jack {
 		std::string_view name = currentToken->getValue();
 		advance();
 
-		std::vector<std::unique_ptr<Type>> generics;
+		std::vector<const Type*> generics;
 		if (name == "Array" && check(TokenType::SYMBOL, "<")) {
 			advance(); // Consume the '<'
 
 			do {
 				if (auto arg = parseType()) {
-					generics.push_back(std::move(arg));
+					generics.push_back(arg);
 				}
 			} while (match(TokenType::SYMBOL, ","));
 
@@ -709,6 +747,7 @@ namespace nand2tetris::jack {
 		return std::make_unique<ArrayAccessNode>(std::move(left), std::move(index), line, col);
 	}
 
+	// ReSharper disable once CppDFAUnreachableFunctionCall
 	std::vector<std::unique_ptr<ExpressionNode>> PrattParser::parseExpressionList() {
 		std::vector<std::unique_ptr<ExpressionNode>> expressions;
 

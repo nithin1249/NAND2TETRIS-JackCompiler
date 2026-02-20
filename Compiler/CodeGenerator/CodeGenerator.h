@@ -4,7 +4,7 @@
 
 #ifndef NAND2TETRIS_CODE_GENERATOR_H
 #define NAND2TETRIS_CODE_GENERATOR_H
-#include "../Parser/AST.h"
+#include "../AST/AST.h"
 #include "../SemanticAnalyser/GlobalRegistry.h"
 #include "../SemanticAnalyser/SymbolTable.h"
 #include "../VMWriter/VMWriter.h"

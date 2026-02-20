@@ -20,13 +20,17 @@ add_executable(parser
         Compiler/Tokenizer/Tokenizer.h
         Compiler/Tokenizer/Tokenizer.cpp
         Compiler/Tokenizer/TokenTypes.h
-        Compiler/Parser/AST.h
+        Compiler/AST/AST.h
         Compiler/Parser/PrattParser.h
         Compiler/Parser/PrattParser.cpp
         test/jack_parser.cpp
         Compiler/Parser/XMLVisitor.h
         Compiler/Parser/XMLExporter.cpp
-        Compiler/Parser/XMLExporter.h)
+        Compiler/Parser/XMLExporter.h
+        Compiler/GlobalRegistry/GlobalRegistry.h
+        Compiler/GlobalRegistry/GlobalRegistry.cpp
+        Compiler/TypeRegistry/TypeRegistry.cpp
+        Compiler/TypeRegistry/TypeRegistry.h)
 
 if(WIN32)
     target_link_libraries(NAND2TETRIS psapi)

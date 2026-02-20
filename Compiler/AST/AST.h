@@ -62,7 +62,7 @@ namespace nand2tetris::jack {
             explicit Node(const int l, const int c):line(l),column(c){};
             virtual ~Node() = default;
 
-            virtual void accept(ASTVisitor& visitor)=0;
+            virtual void accept(ASTVisitor& visitor)const =0;
 
             /**
              * @brief Gets the line number of the node.
@@ -81,16 +81,80 @@ namespace nand2tetris::jack {
     };
 
     struct Type {
-        std::string_view baseType; // e.g., "Array", "int"
-        std::vector<std::unique_ptr<Type>> genericArgs; // e.g., <int>
-        bool isConst = false;   // For strict C++ style typing
+        private:
+            std::string_view baseType; // e.g., "Array", "int"
+            std::vector<std::unique_ptr<Type>> genericArgs; // e.g., <int>
+            bool isConst = false;   // For strict C++ style typing
+        public:
+            // Constructors
+            Type() : baseType("void") {}
+            explicit Type(const std::string_view base) : baseType(base) {}
 
-        // Essential for LLVM: maps this Jack type to a native bit-width
-        int getBitWidth() const {
-            if (baseType == "int") return 32;
-            if (baseType == "char" || baseType == "boolean") return 8;
-            return 64; // Pointers/Objects in 64-bit systems
-        }
+            Type(const Type& other) : baseType(other.baseType), isConst(other.isConst) {
+                    // Deep copy each generic argument by creating new unique_ptrs
+                    for (const auto& arg : other.genericArgs) {
+                        if (arg) {
+                            genericArgs.push_back(std::make_unique<Type>(*arg)); // Recursive copy
+                        }
+                    }
+                }
+
+            // You should also define the move constructor to keep it efficient
+            Type(Type&&) noexcept = default;
+            Type& operator=(Type&&) noexcept = default;
+
+            bool operator==(const Type& other) const {
+                // 1. Check base types (e.g., "Array" == "Array")
+                if (baseType != other.baseType) return false;
+
+                // 2. Check generic counts (e.g., <int> vs <int, float>)
+                if (genericArgs.size() != other.genericArgs.size()) return false;
+
+                // 3. Deep recursive comparison of every generic argument
+                for (size_t i = 0; i < genericArgs.size(); ++i) {
+                    if (!(*genericArgs[i] == *other.genericArgs[i])) return false;
+                }
+
+                return true;
+            }
+            [[nodiscard]] std::string_view getBaseType() const { return baseType; }
+            [[nodiscard]] bool is_Const() const { return isConst; }
+            [[nodiscard]] const std::vector<std::unique_ptr<Type>>& getGenericArgs() const { return genericArgs; }
+
+            std::string formatType() const {
+                auto s = std::string(this->getBaseType());
+                if (this->isGeneric()) {
+                    s += "<";
+                    const auto& generics=this->getGenericArgs();
+                    for (size_t i = 0; i < generics.size(); ++i) {
+                        s += generics[i]->formatType();
+                        if (i < generics.size() - 1) s += ", ";
+                    }
+                    s += ">";
+                }
+                return s;
+            }
+
+            void addGenericArg(std::unique_ptr<Type> arg) {
+                    genericArgs.push_back(std::move(arg));
+            }
+
+            void setConst(const bool value) { isConst = value; }
+
+            [[nodiscard]] int getBitWidth() const {
+                    if (baseType == "int") return 32;
+                    if (baseType == "char" || baseType == "boolean") return 8;
+                    return 64; // Pointers/Objects
+            }
+
+            [[nodiscard]] bool isPrimitive() const {
+                    return (baseType == "int" || baseType == "char" || baseType == "boolean"||baseType=="float");
+            }
+
+            [[nodiscard]] bool isGeneric() const {
+                    return !genericArgs.empty();
+            }
+
     };
 
     /**
@@ -107,7 +171,7 @@ namespace nand2tetris::jack {
      */
     class ExpressionNode : public Node {
         public: using Node::Node;
-        std::shared_ptr<Type> resolvedType=nullptr;
+        const Type* const resolvedType=nullptr;
         virtual bool isCall() const { return false; }
     };
 
@@ -129,8 +193,8 @@ namespace nand2tetris::jack {
              */
             explicit IntegerLiteralNode(const int32_t val,const int l, const int c): ExpressionNode (l,c),value(val) {}
             ~IntegerLiteralNode() override = default;
-            void accept(ASTVisitor& v) override { v.visit(*this); }
-            int32_t getInt() const{return value;}
+            void accept(ASTVisitor& v) const override { v.visit(*this); }
+            const int32_t getInt() const{return value;}
     };
 
     /**
@@ -151,8 +215,8 @@ namespace nand2tetris::jack {
             explicit FloatLiteralNode(const double val, const int l, const int c)
                 :ExpressionNode (l,c),value(val) {}
             ~FloatLiteralNode() override = default;
-            void accept(ASTVisitor& v) override { v.visit(*this); }
-            double getFloat() const{return value;}
+            void accept(ASTVisitor& v)const override { v.visit(*this); }
+            const double getFloat() const{return value;}
     };
 
 
@@ -174,8 +238,8 @@ namespace nand2tetris::jack {
              */
             explicit StringLiteralNode(const std::string_view val,const int l, const int c) : ExpressionNode(l,c),value(val) {}
             ~StringLiteralNode() override = default;
-            void accept(ASTVisitor& v) override { v.visit(*this); }
-            std::string_view getString() const{return value;}
+            void accept(ASTVisitor& v) const override { v.visit(*this); }
+            const std::string_view getString() const{return value;}
     };
 
     /**
@@ -196,7 +260,7 @@ namespace nand2tetris::jack {
             explicit KeywordLiteralNode(const Keyword val, const int l, const int c) :ExpressionNode(l,c),value(val) {}
             ~KeywordLiteralNode() override = default;
 
-            void accept(ASTVisitor& v) override { v.visit(*this); }
+            void accept(ASTVisitor& v)const override { v.visit(*this); }
             Keyword getKeyword() const{return value;}
     };
 
@@ -225,11 +289,11 @@ namespace nand2tetris::jack {
                 : ExpressionNode(line, column),left(std::move(l)), op(o), right(std::move(r)) {}
             ~BinaryOpNode() override = default;
 
-            void accept(ASTVisitor& v) override { v.visit(*this); }
+            void accept(ASTVisitor& v)const override { v.visit(*this); }
 
-            char getOp() const{return op;}
-            ExpressionNode* getLeft() const { return left.get(); }
-            ExpressionNode* getRight() const { return right.get(); }
+            const char getOp() const{return op;}
+            const ExpressionNode& getLeft() const { return *left; }
+            const ExpressionNode& getRight() const { return *right; }
     };
 
 
@@ -253,9 +317,9 @@ namespace nand2tetris::jack {
             UnaryOpNode(const char o, std::unique_ptr<ExpressionNode> t,const int line, const int column)
                 : ExpressionNode(line, column),op(o), term(std::move(t)) {}
             ~UnaryOpNode() override = default;
-            void accept(ASTVisitor& v) override { v.visit(*this); }
-            char getOp() const { return op; }
-            ExpressionNode* getTerm() const { return term.get(); }
+            void accept(ASTVisitor& v)const override { v.visit(*this); }
+            const char getOp() const { return op; }
+            const ExpressionNode& getTerm() const { return *term; }
     };
 
     /**
@@ -263,10 +327,11 @@ namespace nand2tetris::jack {
      *
      * Example: `x`, `arr[i]`
      */
+    //
     class IdentifierNode final : public ExpressionNode {
         protected:
             std::string_view name; ///< The name of the identifier.
-            std::vector<std::unique_ptr<Type>> genericArgs; // Holds <int>, <String>, etc.
+            std::vector<const Type*> genericArgs; // Holds <int>, <String>, etc.
         public:
             /**
              * @brief Constructs an IdentifierNode.
@@ -275,13 +340,13 @@ namespace nand2tetris::jack {
              * @param l The line number.
              * @param c The column number.
              */
-            IdentifierNode(const std::string_view n,std::vector<std::unique_ptr<Type>> generics,const int l, const int
+            IdentifierNode(const std::string_view n, std::vector<const Type*> generics,const int l, const int
                 c): ExpressionNode(l,c) ,name(n), genericArgs(std::move(generics)) {}
             ~IdentifierNode() override = default;
 
-            void accept(ASTVisitor& v) override { v.visit(*this); }
-            std::string_view getName() const { return name; }
-            const std::vector<std::unique_ptr<Type>>& getGenericArgs() const { return genericArgs; }
+            void accept(ASTVisitor& v) const override { v.visit(*this); }
+            const std::string_view getName() const { return name; }
+            const std::vector<const Type*>& getGenericArgs() const { return genericArgs;}
     };
 
     class ArrayAccessNode final : public ExpressionNode {
@@ -291,10 +356,10 @@ namespace nand2tetris::jack {
         ArrayAccessNode(std::unique_ptr<ExpressionNode> b, std::unique_ptr<ExpressionNode> idx, int l, int c)
             : ExpressionNode(l, c), base(std::move(b)), index(std::move(idx)) {}
 
-        void accept(ASTVisitor& v) override { v.visit(*this); }
+        void accept(ASTVisitor& v)const override { v.visit(*this); }
 
-        ExpressionNode* getBase() const { return base.get(); }
-        ExpressionNode* getIndex() const { return index.get(); }
+        const ExpressionNode& getBase() const { return *base; }
+        const ExpressionNode& getIndex() const { return *index; }
     };
 
     /**
@@ -302,6 +367,7 @@ namespace nand2tetris::jack {
      *
      * Example: `foo()`, `Math.sqrt(x)`, `obj.method()`
      */
+    //
     class CallNode final : public ExpressionNode {
         protected:
             std::unique_ptr<ExpressionNode> receiver;
@@ -322,11 +388,18 @@ namespace nand2tetris::jack {
 
             ~CallNode() override = default;
 
-            void accept(ASTVisitor& v) override { v.visit(*this); }
+            void accept(ASTVisitor& v) const override { v.visit(*this); }
             bool isCall() const override { return true; }
-            ExpressionNode* getReceiver() const { return receiver.get(); }
-            std::string_view getFunctionName() const { return functionName; }
-            const std::vector<std::unique_ptr<ExpressionNode>>& getArgs() const { return arguments; }
+            const ExpressionNode* const getReceiver() const { return receiver.get(); }
+            const std::string_view getFunctionName() const { return functionName; }
+            const std::vector<const ExpressionNode*> getArgs() const {
+                std::vector<const ExpressionNode*> views;
+                views.reserve(arguments.size());
+                for (const auto& arg : arguments) {
+                    views.push_back(arg.get()); // Provides a raw observer pointer
+                }
+                return views; // Implicitly converts to const std::vector on return
+            }
     };
 
 
@@ -346,7 +419,7 @@ namespace nand2tetris::jack {
     class ClassVarDecNode final : public Node {
         protected:
             ClassVarKind kind; ///< The kind of variable (static or field).
-            std::shared_ptr<Type> type; ///< The data type of the variable(s) (e.g., "int", "boolean", "MyClass").
+            const Type* const type; ///< The data type of the variable(s) (e.g., "int", "boolean", "MyClass").
             std::vector<std::string_view> varNames; ///< A list of variable names declared in this statement.
         public:
             /**
@@ -358,13 +431,13 @@ namespace nand2tetris::jack {
              * @param l the line on source code.
              * @param c the column on source code.
              */
-            ClassVarDecNode(const ClassVarKind k, std::shared_ptr<Type> t, std::vector<std::string_view> names,
-                const int l, const int c):Node(l,c),kind(k),type(std::move(t)), varNames(std::move(names)) {};
+            ClassVarDecNode(const ClassVarKind k, const Type*const t, std::vector<std::string_view> names,
+                const int l, const int c):Node(l,c),kind(k),type(t), varNames(std::move(names)) {};
             ~ClassVarDecNode() override = default;
-            void accept(ASTVisitor& v) override { v.visit(*this); }
+            void accept(ASTVisitor& v)const override { v.visit(*this); }
 
-            ClassVarKind getKind() const { return kind; }
-            const Type* getType() const { return type.get(); }
+            const ClassVarKind getKind() const { return kind; }
+            const Type& getType() const { return *type; }
             const std::vector<std::string_view>& getVarNames() const { return varNames; }
 
     };
@@ -376,8 +449,8 @@ namespace nand2tetris::jack {
      */
     class VarDecNode final : public Node {
         protected:
-           std::shared_ptr<Type> type; // Changed from string_view ///< The data type of the variable(s).
-            std::vector<std::string_view> varNames; ///< A list of variable names declared.
+            const Type* const type; // Changed from string_view ///< The data type of the variable(s).
+            std::vector< std::string_view> varNames; ///< A list of variable names declared.
         public:
             /**
              * @brief Constructs a VarDecNode.
@@ -387,13 +460,13 @@ namespace nand2tetris::jack {
              * @param l The line number.
              * @param c The column number.
              */
-            VarDecNode(std::shared_ptr<Type> t, std::vector<std::string_view> names, const int l, const int c)
-                : Node(l,c),type(std::move(t)), varNames(std::move(names)) {};
+            VarDecNode(const Type* const t, std::vector<std::string_view> names, const int l, const int c)
+                : Node(l,c),type(t), varNames(std::move(names)) {};
             ~VarDecNode() override = default;
-            void accept(ASTVisitor& v) override { v.visit(*this); }
+            void accept(ASTVisitor& v) const override { v.visit(*this); }
 
-            Type* getType() const { return type.get(); }
-            const std::vector<std::string_view>& getVarNames() const { return varNames; }
+            const Type& getType() const { return *type; }
+            std::vector<std::string_view> getVarNames() const { return varNames; }
     };
 
     /**
@@ -410,9 +483,16 @@ namespace nand2tetris::jack {
      *
      * Example: `int x` in `function void foo(int x)`
      */
-    struct Parameter {
-        std::shared_ptr<Type> type; ///< The data type of the parameter.
-        std::string_view name; ///< The name of the parameter.
+    class Parameter {
+            const Type* const type; // The encapsulated Type heart
+            std::string_view name;      // The parameter's identifier
+        public:
+            Parameter(const Type* const paramType, const std::string_view paramName)
+            : type(paramType), name(paramName) {}
+
+            // --- Public Getters (Read-Only) ---
+            [[nodiscard]] const Type& getType() const { return *type; }
+            [[nodiscard]] const std::string_view getName() const { return name; }
     };
 
 
@@ -440,11 +520,11 @@ namespace nand2tetris::jack {
                 : StatementNode(l,c) ,varName(name), indexExpr(std::move(idx)), valueExpr(std::move(val)) {}
             ~LetStatementNode() override = default;
 
-            void accept(ASTVisitor& v) override { v.visit(*this); }
+            void accept(ASTVisitor& v)const override { v.visit(*this); }
 
             std::string_view getVarName() const { return varName; }
-            ExpressionNode* getIndex() const { return indexExpr.get(); }
-            ExpressionNode* getValue() const { return valueExpr.get(); }
+            const ExpressionNode*const getIndex() const { return indexExpr.get(); }
+            const ExpressionNode& getValue() const { return *valueExpr; }
     };
 
     /**
@@ -472,11 +552,26 @@ namespace nand2tetris::jack {
                 elseStatements(std::move(elseStmts)){};
             ~IfStatementNode() override = default;
 
-            void accept(ASTVisitor& v) override { v.visit(*this); }
+            void accept(ASTVisitor& v)const override { v.visit(*this); }
 
-            ExpressionNode* getCondition() const { return condition.get(); }
-            const std::vector<std::unique_ptr<StatementNode>>& getIfBranch() const { return ifStatements; }
-            const std::vector<std::unique_ptr<StatementNode>>& getElseBranch() const { return elseStatements; }
+            const ExpressionNode& getCondition() const { return *condition; }
+            const std::vector<const StatementNode*> getIfBranch() const {
+                std::vector<const StatementNode*> views;
+                views.reserve(ifStatements.size());
+                for (const auto& stmt : ifStatements) {
+                    views.push_back(stmt.get()); // Provides a raw observer pointer
+                }
+                return views;
+            }
+
+            const std::vector<const StatementNode*> getElseBranch() const {
+                std::vector<const StatementNode*> views;
+                views.reserve(elseStatements.size());
+                for (const auto& stmt : elseStatements) {
+                    views.push_back(stmt.get()); // Provides a raw observer pointer
+                }
+                return views;
+            }
     };
 
     /**
@@ -501,9 +596,16 @@ namespace nand2tetris::jack {
                 : StatementNode(l,c),condition(std::move(cond)), body(std::move(b)) {}
             ~WhileStatementNode() override = default;
 
-            void accept(ASTVisitor& v) override { v.visit(*this); }
-            ExpressionNode* getCondition() const { return condition.get(); }
-            const std::vector<std::unique_ptr<StatementNode>>& getBody() const { return body; }
+            void accept(ASTVisitor& v)const override { v.visit(*this); }
+            const ExpressionNode& getCondition() const { return *condition; }
+            const std::vector<const StatementNode*> getBody() const {
+                std::vector<const StatementNode*> views;
+                views.reserve(body.size());
+                for (const auto& stmt : body) {
+                    views.push_back(stmt.get()); // Provides a raw observer pointer
+                }
+                return views;
+            }
     };
 
     /**
@@ -525,8 +627,8 @@ namespace nand2tetris::jack {
             explicit DoStatementNode(std::unique_ptr<CallNode> call,const int l, const int c) : StatementNode(l,c),callExpression(std::move(call)){};
             ~DoStatementNode() override = default;
 
-            void accept(ASTVisitor& v) override { v.visit(*this); }
-            CallNode* getCall() const { return callExpression.get(); }
+            void accept(ASTVisitor& v)const override { v.visit(*this); }
+            const CallNode& getCall() const { return *callExpression; }
     };
 
     /**
@@ -548,8 +650,8 @@ namespace nand2tetris::jack {
             explicit ReturnStatementNode(std::unique_ptr<ExpressionNode> expr,const int l,const int c) : StatementNode
                 (l,c), expression(std::move(expr)) {}
             ~ReturnStatementNode() override = default;
-            void accept(ASTVisitor& v) override { v.visit(*this); }
-            ExpressionNode* getExpression() const { return expression.get(); }
+            void accept(ASTVisitor& v)const override { v.visit(*this); }
+            const ExpressionNode*const getExpression() const { return expression.get(); }
     };
 
     /**
@@ -558,7 +660,7 @@ namespace nand2tetris::jack {
     class SubroutineDecNode final : public Node {
         protected:
             SubroutineType subType; ///< The type of subroutine (constructor, function, method).
-            std::shared_ptr<Type> returnType; ///< The return type (e.g., "void", "int", "MyClass").
+            const Type* const returnType; ///< The return type (e.g., "void", "int", "MyClass").
             std::string_view name; ///< The name of the subroutine.
             std::vector<Parameter> parameters; ///< The list of parameters.
 
@@ -576,23 +678,47 @@ namespace nand2tetris::jack {
              * @param l The line number.
              * @param c The column number.
              */
-            SubroutineDecNode(const SubroutineType st, std::shared_ptr<Type> ret, const std::string_view n,
+            SubroutineDecNode(const SubroutineType st, const Type* const ret, const std::string_view n,
                 std::vector<Parameter> parameters, std::vector<std::unique_ptr<VarDecNode>> vars,
                 std::vector<std::unique_ptr<StatementNode>> stmts,const int l, const int c)
-                : Node(l,c),subType(st), returnType(std::move(ret)), name(n),parameters(std::move
+                : Node(l,c),subType(st), returnType(ret), name(n),parameters(std::move
                     (parameters)),localVars(std::move
                     (vars)),statements(std::move(stmts)) {};
 
             ~SubroutineDecNode() override = default;
 
-            void accept(ASTVisitor& v) override { v.visit(*this); }
+            void accept(ASTVisitor& v) const override { v.visit(*this); }
 
-            SubroutineType getSubType() const { return subType; }
-            Type* getReturnType() const { return returnType.get(); }
-            std::string_view getName() const { return name; }
-            const std::vector<Parameter>& getParams() const { return parameters; }
-            const std::vector<std::unique_ptr<VarDecNode>>& getLocals() const { return localVars; }
-            const std::vector<std::unique_ptr<StatementNode>>& getStatements() const { return statements;}
+            const SubroutineType getSubType() const { return subType; }
+            const Type& getReturnType() const { return *returnType; }
+            const std::string_view getName() const { return name; }
+
+            const std::vector<const Parameter*> getParams() const {
+                std::vector<const Parameter*> views;
+                views.reserve(parameters.size());
+                for (const auto& param : parameters) {
+                    views.push_back(&param); // Capture address of the parameter
+                }
+                return views;
+            }
+
+            const std::vector<const VarDecNode*> getLocals() const {
+                std::vector<const VarDecNode*> views;
+                views.reserve(localVars.size());
+                for (const auto& var : localVars) {
+                    views.push_back(var.get()); // Observer pointer
+                }
+                return views;
+            }
+
+            const std::vector<const StatementNode*> getStatements() const {
+                std::vector<const StatementNode*> views;
+                views.reserve(statements.size());
+                for (const auto& stmt : statements) {
+                    views.push_back(stmt.get()); // Observer pointer
+                }
+                return views;
+            }
     };
 
     /**
@@ -618,10 +744,26 @@ namespace nand2tetris::jack {
                 classVars,std::vector<std::unique_ptr<SubroutineDecNode>> subroutineDecs,const int l, const int c) :
                 Node(l,c),className(className),classVars(std::move(classVars)), subroutineDecs(std::move(subroutineDecs)) {};
             ~ClassNode() override = default;
-            void accept(ASTVisitor& visitor)override{visitor.visit(*this);}
-            std::string_view getClassName()const { return className; }
-            const std::vector<std::unique_ptr<ClassVarDecNode>>& getClassVars() const { return classVars; }
-            const std::vector<std::unique_ptr<SubroutineDecNode>>& getSubroutines() const { return subroutineDecs; }
+            void accept(ASTVisitor& visitor)const override{visitor.visit(*this);}
+            const std::string_view getClassName()const { return className; }
+
+            const std::vector<const ClassVarDecNode*> getClassVars() const {
+                std::vector<const ClassVarDecNode*> views;
+                views.reserve(classVars.size());
+                for (const auto& var : classVars) {
+                    views.push_back(var.get()); //
+                }
+                return views; // Implicitly converts to const std::vector on return
+            }
+
+            const std::vector<const SubroutineDecNode*> getSubroutines() const {
+                std::vector<const SubroutineDecNode*> views;
+                views.reserve(subroutineDecs.size());
+                for (const auto& sub : subroutineDecs) {
+                    views.push_back(sub.get()); //
+                }
+                return views;
+            }
     };
 
 }

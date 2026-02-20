@@ -2,7 +2,7 @@
 // Created by Nithin Kondabathini on 21/1/2026.
 //
 
-#include "SymbolTable.h"
+#include "../SemanticAnalyser/SymbolTable.h"
 #include <stdexcept>
 #include <string>
 #include <fstream>

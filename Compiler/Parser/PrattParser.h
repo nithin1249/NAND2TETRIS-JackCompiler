@@ -11,8 +11,10 @@
 #include <string_view>
 #include <stdexcept>
 
-#include "AST.h"
+#include "../AST/AST.h"
 #include "../Tokenizer/Tokenizer.h"
+#include "../GlobalRegistry/GlobalRegistry.h"
+#include "../TypeRegistry/TypeRegistry.h"
 
 
 namespace nand2tetris::jack{
@@ -55,6 +57,10 @@ namespace nand2tetris::jack{
 		private:
 			Tokenizer& tokenizer;
 			const Token* currentToken=nullptr;
+			GlobalRegistry& registry;
+			TypeRegistry& typeRegistry;
+			std::string_view currentClassName;
+
 
 			// --- The Hybrid Dispatch Table ---
 			// Maps generic types (Identifiers, Ints, Strings)
@@ -80,7 +86,7 @@ namespace nand2tetris::jack{
 			void synchronize();
 
 			// --- Type & High-Level Declaration Helpers ---
-			std::unique_ptr<Type> parseType(bool allowVoid=false); // Handles Generics like Array<T>
+			const Type* const parseType(bool allowVoid=false); // Handles Generics like Array<T>
 			std::vector<Parameter> parseParameterList();
 
 			std::unique_ptr<ClassNode> parseClass();
@@ -114,7 +120,7 @@ namespace nand2tetris::jack{
 			std::vector<std::unique_ptr<ExpressionNode>> parseExpressionList();
 
 		public:
-			explicit PrattParser(Tokenizer& tokenizer);
+			explicit PrattParser(Tokenizer& tokenizer, GlobalRegistry& registry, TypeRegistry& types);
 			std::unique_ptr<ClassNode> parse();
 			bool hasErrors() const { return !errors.empty(); }
 			const std::vector<ParseError>& getErrors() const { return errors; }
